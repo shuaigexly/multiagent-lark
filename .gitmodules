@@ -1,0 +1,6 @@
+[submodule "MetaGPT"]
+	path = MetaGPT
+	url = https://github.com/FoundationAgents/MetaGPT.git
+[submodule "OpenManus"]
+	path = OpenManus
+	url = https://github.com/FoundationAgents/OpenManus.git
