@@ -1,6 +1,18 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_OVERRIDABLE_FIELDS = {
+    "llm_api_key",
+    "llm_base_url",
+    "llm_model",
+    "llm_provider",
+    "feishu_app_id",
+    "feishu_app_secret",
+    "feishu_region",
+}
+_db_overrides: dict[str, str | None] = {}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -38,5 +50,48 @@ class Settings(BaseSettings):
     api_key: str = ""
     allowed_origins: str = "http://localhost:5173"
 
+    def __getattribute__(self, name: str):
+        if name in _OVERRIDABLE_FIELDS:
+            override = _db_overrides.get(name)
+            if override:
+                return override
+        return super().__getattribute__(name)
+
 
 settings = Settings()
+
+
+def apply_db_config(overrides: dict[str, str | None]):
+    for key, value in overrides.items():
+        if key not in _OVERRIDABLE_FIELDS:
+            continue
+        normalized = value.strip() if isinstance(value, str) else value
+        _db_overrides[key] = normalized or None
+
+
+def get_llm_api_key() -> str:
+    return _db_overrides.get("llm_api_key") or settings.llm_api_key
+
+
+def get_llm_base_url() -> str:
+    return _db_overrides.get("llm_base_url") or settings.llm_base_url
+
+
+def get_llm_model() -> str:
+    return _db_overrides.get("llm_model") or settings.llm_model
+
+
+def get_llm_provider() -> str:
+    return _db_overrides.get("llm_provider") or settings.llm_provider
+
+
+def get_feishu_app_id() -> str:
+    return _db_overrides.get("feishu_app_id") or settings.feishu_app_id
+
+
+def get_feishu_app_secret() -> str:
+    return _db_overrides.get("feishu_app_secret") or settings.feishu_app_secret
+
+
+def get_feishu_region() -> str:
+    return _db_overrides.get("feishu_region") or settings.feishu_region

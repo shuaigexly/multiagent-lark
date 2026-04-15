@@ -8,9 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import redis.asyncio as aioredis
 from sqlalchemy import select, update
 
+from app.api import config as config_api
 from app.api import events, feishu, results, tasks
-from app.core.settings import settings
-from app.models.database import Task, init_db, AsyncSessionLocal
+from app.core.settings import apply_db_config, settings
+from app.feishu.client import reset_feishu_client
+from app.models.database import AsyncSessionLocal, Task, UserConfig, init_db
 from app.core.event_emitter import EventEmitter
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # 启动：初始化数据库
     await init_db()
+    await _load_runtime_config()
     app.state.redis_client = None
     try:
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
@@ -65,6 +68,13 @@ async def _recover_interrupted_tasks():
         logger.info(f"恢复了 {len(stale_tasks)} 个遗留任务（标记为 failed）")
 
 
+async def _load_runtime_config():
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(UserConfig))
+        apply_db_config({row.key: row.value for row in result.scalars().all()})
+    reset_feishu_client()
+
+
 app = FastAPI(
     title="飞书 AI 工作台",
     description="面向复杂任务的飞书 AI 工作台 — 自动识别任务类型，调用多 Agent 模块，结果返回飞书",
@@ -86,6 +96,7 @@ app.include_router(tasks.router)
 app.include_router(events.router)
 app.include_router(results.router)
 app.include_router(feishu.router)
+app.include_router(config_api.router)
 
 
 @app.get("/health")

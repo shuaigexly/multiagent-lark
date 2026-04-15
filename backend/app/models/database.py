@@ -77,6 +77,14 @@ class PublishedAsset(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UserConfig(Base):
+    __tablename__ = "user_config"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 # Async engine
 engine = create_async_engine(
     settings.database_url,

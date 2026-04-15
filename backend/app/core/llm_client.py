@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import logging
 
-from app.core.settings import settings
+from app.core.settings import (
+    get_llm_api_key,
+    get_llm_base_url,
+    get_llm_model,
+    get_llm_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +40,7 @@ async def call_llm(
     Raises:
         RuntimeError: 配置错误或调用失败
     """
-    provider = settings.llm_provider.strip().lower()
+    provider = get_llm_provider().strip().lower()
 
     if provider == "feishu_aily":
         return await _call_feishu_aily(system_prompt, user_prompt)
@@ -62,11 +67,11 @@ async def _call_openai_compatible(
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
+        api_key=get_llm_api_key(),
+        base_url=get_llm_base_url(),
     )
     resp = await client.chat.completions.create(
-        model=settings.llm_model,
+        model=get_llm_model(),
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

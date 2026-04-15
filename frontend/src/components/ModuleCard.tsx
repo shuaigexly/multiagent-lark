@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { AgentInfo } from '../services/types';
 
 interface Props {
@@ -7,183 +8,137 @@ interface Props {
   disabled?: boolean;
 }
 
-const MODULE_ACCENT: Record<string, string> = {
-  data_analyst: 'var(--info)',
-  finance_advisor: 'var(--success)',
-  seo_advisor: 'var(--warning)',
-  content_manager: '#c084fc',
-  product_manager: '#22d3ee',
-  operations_manager: 'var(--error)',
-  ceo_assistant: 'var(--gold)',
+const AGENT_PERSONAS: Record<
+  string,
+  {
+    name: string;
+    title: string;
+    avatar: string;
+    color: string;
+    soft: string;
+    personality: string[];
+    tagline: string;
+  }
+> = {
+  data_analyst: {
+    name: '陈晓明',
+    title: '数据分析师',
+    avatar: '陈',
+    color: '#2563eb',
+    soft: 'rgba(37, 99, 235, 0.15)',
+    personality: ['严谨', '数字控', '逻辑清晰'],
+    tagline: '用数字说话，把模糊问题变成精确结论',
+  },
+  finance_advisor: {
+    name: '李婷婷',
+    title: 'CFO · 财务顾问',
+    avatar: '李',
+    color: '#059669',
+    soft: 'rgba(5, 150, 105, 0.15)',
+    personality: ['稳健', '风控意识强', '利润优先'],
+    tagline: '守护现金流，每一分钱都要花在刀刃上',
+  },
+  seo_advisor: {
+    name: '王浩然',
+    title: '增长黑客',
+    avatar: '王',
+    color: '#d97706',
+    soft: 'rgba(217, 119, 6, 0.15)',
+    personality: ['激进', '流量思维', '实验驱动'],
+    tagline: '找到你的用户在哪，把他们带到你面前',
+  },
+  content_manager: {
+    name: '林诗雨',
+    title: '内容总监',
+    avatar: '林',
+    color: '#7c3aed',
+    soft: 'rgba(124, 58, 237, 0.15)',
+    personality: ['创意', '品牌感强', '细节控'],
+    tagline: '让每一篇内容都成为品牌的名片',
+  },
+  product_manager: {
+    name: '张志远',
+    title: '产品经理',
+    avatar: '张',
+    color: '#db2777',
+    soft: 'rgba(219, 39, 119, 0.15)',
+    personality: ['用户导向', '需求挖掘', '路线清晰'],
+    tagline: '把用户痛点变成产品机会，让功能讲故事',
+  },
+  operations_manager: {
+    name: '赵小雅',
+    title: '运营总监',
+    avatar: '赵',
+    color: '#0891b2',
+    soft: 'rgba(8, 145, 178, 0.15)',
+    personality: ['执行力强', '多线并行', '结果导向'],
+    tagline: '从计划到落地，确保每个环节都不掉链子',
+  },
+  ceo_assistant: {
+    name: '吴思远',
+    title: 'CEO 助理',
+    avatar: '吴',
+    color: '#374151',
+    soft: 'rgba(55, 65, 81, 0.15)',
+    personality: ['全局视野', '决策支持', '综合汇总'],
+    tagline: '帮你看清全局，把所有结论整合成行动计划',
+  },
 };
 
-const MODULE_PREFIX: Record<string, string> = {
-  data_analyst: 'DA',
-  finance_advisor: 'FIN',
-  seo_advisor: 'SEO',
-  content_manager: 'CM',
-  product_manager: 'PM',
-  operations_manager: 'OPS',
-  ceo_assistant: 'CEO',
-};
+export default function ModuleCard({ agent, selected, onToggle, disabled = false }: Props) {
+  const persona = AGENT_PERSONAS[agent.id] ?? {
+    name: agent.name,
+    title: 'AI 团队成员',
+    avatar: agent.name.slice(0, 1),
+    color: '#6b7280',
+    soft: 'rgba(107, 114, 128, 0.15)',
+    personality: agent.suitable_for.slice(0, 3),
+    tagline: agent.description,
+  };
 
-export default function ModuleCard({ agent, selected, onToggle, disabled }: Props) {
-  const accent = MODULE_ACCENT[agent.id] || 'var(--text-secondary)';
-  const prefix = MODULE_PREFIX[agent.id] || agent.id.slice(0, 3).toUpperCase();
+  const cardStyle = {
+    borderColor: selected ? persona.color : 'var(--border)',
+    borderWidth: selected ? '2px' : '1.5px',
+    background: selected ? `linear-gradient(0deg, ${persona.soft}, ${persona.soft}), #fff` : '#fff',
+  } satisfies CSSProperties;
 
   return (
-    <div
-      role="checkbox"
-      aria-checked={selected}
-      tabIndex={disabled ? -1 : 0}
-      onClick={() => !disabled && onToggle(agent.id)}
-      onKeyDown={(e) => {
-        if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-          e.preventDefault();
+    <button
+      type="button"
+      className={`agent-card${selected ? ' is-selected' : ''}${disabled ? ' is-disabled' : ''}`}
+      onClick={() => {
+        if (!disabled) {
           onToggle(agent.id);
         }
       }}
-      style={{
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        background: selected ? 'var(--bg-elevated)' : 'var(--bg-surface)',
-        border: `1px solid ${selected ? accent : 'var(--border)'}`,
-        borderRadius: 'var(--radius-lg)',
-        padding: 'var(--space-4)',
-        transition: 'all 0.15s ease',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: selected
-          ? `0 0 0 1px ${accent}20, inset 0 0 0 1px ${accent}10`
-          : 'var(--shadow-card)',
-        animation: 'fade-in-up 0.2s ease both',
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled && !selected) {
-          e.currentTarget.style.borderColor = 'var(--border-bright)';
-          e.currentTarget.style.background = 'var(--bg-elevated)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled && !selected) {
-          e.currentTarget.style.borderColor = 'var(--border)';
-          e.currentTarget.style.background = 'var(--bg-surface)';
-        }
-      }}
+      aria-pressed={selected}
+      aria-label={`${persona.name}，${persona.title}`}
+      disabled={disabled}
+      style={cardStyle}
     >
-      {selected && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 2,
-            background: accent,
-            borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-          }}
-        />
-      )}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-3)',
-          marginBottom: 'var(--space-3)',
-        }}
-      >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            flexShrink: 0,
-            background: `${accent}18`,
-            border: `1px solid ${accent}30`,
-            borderRadius: 'var(--radius)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10,
-            fontWeight: 700,
-            color: accent,
-            letterSpacing: '0.05em',
-          }}
-        >
-          {prefix}
+      <div className="agent-card-header">
+        <div className="agent-avatar" style={{ background: persona.color }}>
+          {persona.avatar}
         </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {agent.name}
-          </div>
-        </div>
-
-        <div
-          style={{
-            width: 14,
-            height: 14,
-            flexShrink: 0,
-            border: `1.5px solid ${selected ? accent : 'var(--border-bright)'}`,
-            borderRadius: 'var(--radius-sm)',
-            background: selected ? accent : 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.15s',
-          }}
-        >
-          {selected && (
-            <svg width="8" height="6" viewBox="0 0 8 6" fill="none" aria-hidden="true">
-              <path
-                d="M1 3L3 5L7 1"
-                stroke="#000"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+        <div className="agent-card-info">
+          <div className="agent-name">{persona.name}</div>
+          <div className="agent-title">{persona.title}</div>
         </div>
       </div>
 
-      <p
-        style={{
-          fontSize: 11,
-          color: 'var(--text-secondary)',
-          lineHeight: 1.5,
-          margin: 0,
-          marginBottom: 'var(--space-3)',
-        }}
-      >
-        {agent.description}
-      </p>
+      <span className="agent-check" style={{ background: persona.color }} aria-hidden="true">
+        ✓
+      </span>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {agent.suitable_for.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            style={{
-              fontSize: 10,
-              padding: '1px 6px',
-              background: 'var(--bg-base)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-muted)',
-              letterSpacing: '0.03em',
-            }}
-          >
+      <div className="agent-tagline">{persona.tagline}</div>
+
+      <div className="agent-tags">
+        {persona.personality.map((tag) => (
+          <span key={tag} className="agent-tag" style={{ background: persona.soft, color: persona.color }}>
             {tag}
           </span>
         ))}
       </div>
-    </div>
+    </button>
   );
 }

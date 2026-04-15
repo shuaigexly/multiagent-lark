@@ -1,98 +1,85 @@
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Workbench from './pages/Workbench';
 import ResultView from './pages/ResultView';
 import History from './pages/History';
+import Settings from './pages/Settings';
 
-function Nav() {
+const NAV_ITEMS = [
+  { label: '工作台', path: '/', icon: '⚡', description: '创建和执行新任务' },
+  { label: '历史任务', path: '/history', icon: '📋', description: '查看已完成与进行中的任务' },
+  { label: '设置', path: '/settings', icon: '⚙️', description: '配置 LLM 和飞书凭证' },
+];
+
+function Sidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const onHistory = pathname.startsWith('/history');
 
   return (
-    <header
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        background: 'rgba(5,5,8,0.9)',
-        backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 var(--space-6)',
-        height: 48,
-        gap: 'var(--space-6)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontWeight: 700,
-          fontSize: 13,
-          letterSpacing: '-0.01em',
-          color: 'var(--text-primary)',
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            width: 20,
-            height: 20,
-            background: 'var(--accent)',
-            borderRadius: 'var(--radius-sm)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            color: '#000',
-            fontWeight: 700,
-          }}
-        >
-          AI
-        </span>
-        飞书工作台
+    <aside className="app-sidebar">
+      <div>
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-mark">AI</div>
+          <div>
+            <div className="sidebar-brand-title">飞书 AI 工作台</div>
+            <div className="sidebar-brand-subtitle">Your AI Company</div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="主导航">
+          {NAV_ITEMS.map((item) => {
+            const active = item.path === '/'
+              ? pathname === '/' || pathname.startsWith('/results/')
+              : pathname.startsWith(item.path);
+
+            return (
+              <button
+                key={item.path}
+                type="button"
+                className={`sidebar-nav-item${active ? ' active' : ''}`}
+                onClick={() => navigate(item.path)}
+              >
+                <span className="sidebar-nav-icon" aria-hidden="true">
+                  {item.icon}
+                </span>
+                <span className="sidebar-nav-copy">
+                  <span className="sidebar-nav-label">{item.label}</span>
+                  <span className="sidebar-nav-description">{item.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <nav style={{ display: 'flex', gap: 2, flex: 1 }}>
-        {([
-          { label: '工作台', path: '/', active: !onHistory },
-          { label: '历史任务', path: '/history', active: onHistory },
-        ] as const).map(({ label, path, active }) => (
-          <button
-            key={path}
-            onClick={() => navigate(path)}
-            className="btn btn-ghost btn-sm"
-            style={{
-              color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-              borderColor: active ? 'var(--border)' : 'transparent',
-              background: active ? 'var(--bg-elevated)' : 'transparent',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <div className="status-dot status-dot-pulse" style={{ background: 'var(--success)' }} />
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>ONLINE</span>
+      <div className="sidebar-footer">
+        <div className="sidebar-user">
+          <div className="sidebar-user-avatar">JY</div>
+          <div>
+            <div className="sidebar-user-name">Workspace Owner</div>
+            <div className="sidebar-user-meta">Feishu connected</div>
+          </div>
+        </div>
+        <div className="badge badge-neutral" style={{ justifyContent: 'center', color: 'var(--sidebar-text)' }}>
+          v1.0.0
+        </div>
       </div>
-    </header>
+    </aside>
   );
 }
 
-function AppContent() {
+function AppFrame() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100svh' }}>
-      <Nav />
-      <main style={{ flex: 1 }}>
-        <Routes>
-          <Route path="/" element={<Workbench />} />
-          <Route path="/results/:taskId" element={<ResultView />} />
-          <Route path="/history" element={<History />} />
-        </Routes>
+    <div className="app-shell">
+      <Sidebar />
+      <main className="app-main">
+        <div className="main-scroll">
+          <Routes>
+            <Route path="/" element={<Workbench />} />
+            <Route path="/results/:taskId" element={<ResultView />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );
@@ -101,7 +88,7 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <AppFrame />
     </BrowserRouter>
   );
 }

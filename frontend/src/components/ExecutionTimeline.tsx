@@ -6,255 +6,83 @@ interface Props {
   status: 'running' | 'done' | 'failed' | 'idle';
 }
 
-const EVENT_COLOR: Record<string, string> = {
-  'task.recognized': 'var(--info)',
-  'context.retrieved': 'var(--info)',
-  'module.started': 'var(--warning)',
-  'module.completed': 'var(--success)',
-  'module.failed': 'var(--error)',
-  'feishu.writing': '#c084fc',
-  'task.done': 'var(--accent)',
-  'task.error': 'var(--error)',
+const EVENT_COLORS: Record<string, string> = {
+  'module.completed': 'var(--timeline-success)',
+  'task.done': 'var(--timeline-success)',
+  'module.failed': 'var(--timeline-error)',
+  'task.error': 'var(--timeline-error)',
+  'task.recognized': 'var(--timeline-info)',
+  'context.retrieved': 'var(--timeline-info)',
+  'feishu.writing': 'var(--timeline-info)',
+  'module.started': 'var(--timeline-default)',
 };
 
-const EVENT_PREFIX: Record<string, string> = {
-  'task.recognized': 'PLAN',
-  'context.retrieved': 'CTX',
-  'module.started': 'RUN',
-  'module.completed': 'DONE',
-  'module.failed': 'ERR',
-  'feishu.writing': 'SYNC',
-  'task.done': 'FIN',
-  'task.error': 'ERR',
-};
+function getTimestamp(event: SSEEvent, cache: Map<number, string>) {
+  const payloadTimestamp = event.payload?.timestamp;
 
-function LogLine({ event, index }: { event: SSEEvent; index: number }) {
-  const color = EVENT_COLOR[event.event_type] || 'var(--text-secondary)';
-  const prefix =
-    EVENT_PREFIX[event.event_type] ||
-    event.event_type.split('.').pop()?.toUpperCase() ||
-    'LOG';
-  const isSuccess = event.event_type === 'task.done';
-  const isError =
-    event.event_type === 'task.error' || event.event_type === 'module.failed';
+  if (typeof payloadTimestamp === 'string') {
+    return new Date(payloadTimestamp).toLocaleTimeString('zh-CN', { hour12: false });
+  }
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 'var(--space-3)',
-        padding: 'var(--space-2) 0',
-        borderBottom: '1px solid var(--border)',
-        animation: 'fade-in 0.2s ease both',
-        animationDelay: `${Math.min(index * 30, 200)}ms`,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          color: 'var(--text-muted)',
-          flexShrink: 0,
-          width: 24,
-          textAlign: 'right',
-          paddingTop: 1,
-        }}
-      >
-        {String(event.sequence).padStart(2, '0')}
-      </span>
-      <div
-        style={{
-          flexShrink: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          paddingTop: 5,
-          gap: 2,
-        }}
-      >
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            flexShrink: 0,
-            background: isSuccess ? 'var(--accent)' : isError ? 'var(--error)' : color,
-            boxShadow: isSuccess ? '0 0 8px var(--accent)' : undefined,
-          }}
-        />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            marginBottom: 2,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              padding: '1px 5px',
-              background: `${color}18`,
-              color,
-              border: `1px solid ${color}30`,
-              borderRadius: 'var(--radius-sm)',
-              letterSpacing: '0.08em',
-              flexShrink: 0,
-            }}
-          >
-            {prefix}
-          </span>
-          {event.agent_name && (
-            <span
-              style={{
-                fontSize: 10,
-                color: 'var(--text-muted)',
-                flexShrink: 0,
-              }}
-            >
-              [{event.agent_name}]
-            </span>
-          )}
-        </div>
-        <p
-          style={{
-            fontSize: 12,
-            color: isSuccess
-              ? 'var(--accent)'
-              : isError
-                ? 'var(--error)'
-                : 'var(--text-primary)',
-            lineHeight: 1.5,
-            wordBreak: 'break-word',
-          }}
-        >
-          {event.message}
-        </p>
-      </div>
-    </div>
-  );
+  const existing = cache.get(event.sequence);
+  if (existing) {
+    return existing;
+  }
+
+  const created = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  cache.set(event.sequence, created);
+  return created;
+}
+
+function getModuleName(event: SSEEvent) {
+  if (event.agent_name?.trim()) {
+    return event.agent_name.toUpperCase().replaceAll(' ', '_');
+  }
+
+  return event.event_type.split('.').pop()?.toUpperCase() ?? 'SYSTEM';
 }
 
 export default function ExecutionTimeline({ events, status }: Props) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const timestampCacheRef = useRef(new Map<number, string>());
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [events.length]);
-
-  if (events.length === 0 && status === 'idle') return null;
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [events.length, status]);
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-base)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-4)',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-surface)',
-        }}
-      >
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--error)' }} />
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)' }} />
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />
-        <span
-          style={{
-            fontSize: 10,
-            color: 'var(--text-muted)',
-            marginLeft: 'var(--space-2)',
-            letterSpacing: '0.05em',
-          }}
-        >
-          EXECUTION LOG
-        </span>
-        {status === 'running' && (
-          <div
-            style={{
-              marginLeft: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <div className="spinner" />
-            <span style={{ fontSize: 10, color: 'var(--warning)' }}>RUNNING</span>
-          </div>
-        )}
-        {status === 'done' && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontSize: 10,
-              color: 'var(--accent)',
-              letterSpacing: '0.05em',
-            }}
-          >
-            ✓ COMPLETE
-          </span>
-        )}
-        {status === 'failed' && (
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--error)' }}>
-            ✗ FAILED
-          </span>
-        )}
+    <div className="timeline">
+      <div className="timeline-head">
+        <div className="timeline-title">执行日志</div>
+        <div className="timeline-status">
+          {status === 'running' ? 'Executing...' : status === 'done' ? 'Completed' : 'Waiting'}
+        </div>
       </div>
-      <div
-        style={{
-          padding: 'var(--space-2) var(--space-4)',
-          maxHeight: 360,
-          overflowY: 'auto',
-          fontFamily: 'var(--font)',
-        }}
-      >
+
+      <div ref={bodyRef} className="timeline-body">
         {events.length === 0 ? (
-          <div
-            style={{
-              padding: 'var(--space-4) 0',
-              color: 'var(--text-muted)',
-              fontSize: 11,
-            }}
-          >
-            <span style={{ animation: 'blink 1s step-end infinite' }}>▊</span> 等待执行...
-          </div>
-        ) : (
-          events.map((event, index) => (
-            <LogLine key={event.sequence} event={event} index={index} />
-          ))
-        )}
-        {status === 'running' && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: 'var(--space-2) 0',
-            }}
-          >
-            <div className="spinner" style={{ width: 10, height: 10 }} />
-            <span
-              style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                animation: 'blink 1.2s step-end infinite',
-              }}
-            >
-              处理中...
+          <div className="timeline-line" style={{ color: 'var(--timeline-muted)' }}>
+            <span className="timeline-time">[--:--:--]</span>
+            <span className="timeline-module">SYSTEM</span>
+            <span className="timeline-message">
+              {status === 'running' ? '正在连接执行流...' : '等待执行开始...'}
             </span>
           </div>
+        ) : (
+          events.map((event) => (
+            <div
+              key={event.sequence}
+              className="timeline-line"
+              style={{ color: EVENT_COLORS[event.event_type] ?? 'var(--timeline-default)' }}
+            >
+              <span className="timeline-time">[{getTimestamp(event, timestampCacheRef.current)}]</span>
+              <span className="timeline-module">{getModuleName(event)}</span>
+              <span className="timeline-message">{event.message}</span>
+            </div>
+          ))
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );
