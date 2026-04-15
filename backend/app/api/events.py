@@ -76,7 +76,7 @@ async def _event_generator(task_id: str, request: Request):
             )
             status = status_result.scalar_one_or_none()
 
-        if status in ("done", "failed"):
+        if status in ("done", "failed", "cancelled"):
             yield {"data": json.dumps({"event_type": "stream.end", "status": status})}
             return
 
