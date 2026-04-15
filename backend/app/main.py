@@ -9,7 +9,7 @@ import redis.asyncio as aioredis
 from sqlalchemy import select, update
 
 from app.api import config as config_api
-from app.api import events, feishu, results, tasks
+from app.api import events, feishu, feishu_context as feishu_context_api, results, tasks
 from app.core.settings import apply_db_config, settings
 from app.feishu.client import reset_feishu_client
 from app.models.database import AsyncSessionLocal, Task, UserConfig, init_db
@@ -96,6 +96,7 @@ app.include_router(tasks.router)
 app.include_router(events.router)
 app.include_router(results.router)
 app.include_router(feishu.router)
+app.include_router(feishu_context_api.router)
 app.include_router(config_api.router)
 
 

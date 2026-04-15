@@ -1,87 +1,61 @@
 import { useEffect, useRef } from 'react';
 import type { SSEEvent } from '../services/types';
+import { AGENT_PERSONAS } from './ModuleCard';
 
 interface Props {
   events: SSEEvent[];
   status: 'running' | 'done' | 'failed' | 'idle';
 }
 
-const EVENT_COLORS: Record<string, string> = {
-  'module.completed': 'var(--timeline-success)',
-  'task.done': 'var(--timeline-success)',
-  'module.failed': 'var(--timeline-error)',
-  'task.error': 'var(--timeline-error)',
-  'task.recognized': 'var(--timeline-info)',
-  'context.retrieved': 'var(--timeline-info)',
-  'feishu.writing': 'var(--timeline-info)',
-  'module.started': 'var(--timeline-default)',
-};
-
 function getTimestamp(event: SSEEvent, cache: Map<number, string>) {
-  const payloadTimestamp = event.payload?.timestamp;
-
-  if (typeof payloadTimestamp === 'string') {
-    return new Date(payloadTimestamp).toLocaleTimeString('zh-CN', { hour12: false });
-  }
-
+  const ts = event.payload?.timestamp;
+  if (typeof ts === 'string') return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
   const existing = cache.get(event.sequence);
-  if (existing) {
-    return existing;
-  }
-
+  if (existing) return existing;
   const created = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   cache.set(event.sequence, created);
   return created;
 }
 
 function getModuleName(event: SSEEvent) {
-  if (event.agent_name?.trim()) {
-    return event.agent_name.toUpperCase().replaceAll(' ', '_');
-  }
-
-  return event.event_type.split('.').pop()?.toUpperCase() ?? 'SYSTEM';
+  return event.agent_name?.trim() || event.event_type.split('.').pop()?.toUpperCase() || 'SYSTEM';
 }
 
 export default function ExecutionTimeline({ events, status }: Props) {
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const timestampCacheRef = useRef(new Map<number, string>());
+  const ref = useRef<HTMLDivElement>(null);
+  const cacheRef = useRef(new Map<number, string>());
 
   useEffect(() => {
-    if (bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [events.length, status]);
 
   return (
-    <div className="timeline">
-      <div className="timeline-head">
-        <div className="timeline-title">执行日志</div>
-        <div className="timeline-status">
-          {status === 'running' ? 'Executing...' : status === 'done' ? 'Completed' : 'Waiting'}
-        </div>
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary/50">
+        <span className="text-xs font-medium text-foreground">执行日志</span>
+        <span className={`text-xs ${status === 'running' ? 'text-primary' : status === 'done' ? 'text-success' : 'text-muted-foreground'}`}>
+          {status === 'running' ? '执行中...' : status === 'done' ? '已完成' : '等待中'}
+        </span>
       </div>
-
-      <div ref={bodyRef} className="timeline-body">
+      <div ref={ref} className="p-3 font-mono text-xs leading-6 max-h-72 overflow-y-auto bg-card space-y-0">
         {events.length === 0 ? (
-          <div className="timeline-line" style={{ color: 'var(--timeline-muted)' }}>
-            <span className="timeline-time">[--:--:--]</span>
-            <span className="timeline-module">SYSTEM</span>
-            <span className="timeline-message">
-              {status === 'running' ? '正在连接执行流...' : '等待执行开始...'}
-            </span>
+          <div className="text-muted-foreground">
+            [{status === 'running' ? '连接中' : '等待'}] {status === 'running' ? '正在连接执行流...' : '等待执行开始...'}
           </div>
         ) : (
-          events.map((event) => (
-            <div
-              key={event.sequence}
-              className="timeline-line"
-              style={{ color: EVENT_COLORS[event.event_type] ?? 'var(--timeline-default)' }}
-            >
-              <span className="timeline-time">[{getTimestamp(event, timestampCacheRef.current)}]</span>
-              <span className="timeline-module">{getModuleName(event)}</span>
-              <span className="timeline-message">{event.message}</span>
-            </div>
-          ))
+          events.map((event) => {
+            const name = getModuleName(event);
+            const persona = Object.values(AGENT_PERSONAS).find(p => p.name === name);
+            const isError = event.event_type.includes('failed') || event.event_type.includes('error');
+            const isDone = event.event_type.includes('completed') || event.event_type.includes('done');
+            return (
+              <div key={event.sequence} className={isError ? 'text-destructive' : isDone ? 'text-success' : 'text-foreground'}>
+                <span className="text-muted-foreground">[{getTimestamp(event, cacheRef.current)}]</span>{' '}
+                <span className="font-medium" style={persona ? { color: persona.color } : undefined}>{name}</span>{' '}
+                {event.message}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
