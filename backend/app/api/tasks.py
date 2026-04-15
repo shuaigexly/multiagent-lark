@@ -1,4 +1,5 @@
 """任务 API：提交任务、获取规划、确认执行"""
+import asyncio
 import logging
 import os
 import uuid
@@ -6,7 +7,7 @@ from typing import Optional
 
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_api_key
@@ -40,6 +41,9 @@ async def create_task(
     """
     if not input_text and not file:
         raise HTTPException(422, "input_text 或 file 至少提供一个")
+    MAX_INPUT_LEN = 5000
+    if input_text and len(input_text) > MAX_INPUT_LEN:
+        raise HTTPException(422, f"任务描述不能超过 {MAX_INPUT_LEN} 字符")
 
     task_id = str(uuid.uuid4())
     input_file_path = None
@@ -49,10 +53,10 @@ async def create_task(
     if file:
         import pathlib
 
-        ALLOWED_EXT = {".csv", ".txt"}
+        ALLOWED_EXT = {".csv", ".txt", ".md"}
         ext = pathlib.Path(file.filename or "").suffix.lower()
         if ext not in ALLOWED_EXT:
-            raise HTTPException(422, f"不支持的文件类型，仅接受: {', '.join(ALLOWED_EXT)}")
+            raise HTTPException(422, f"不支持的文件类型，仅接受: {', '.join(sorted(ALLOWED_EXT))}")
         MAX_SIZE = 5 * 1024 * 1024  # 5 MB
         content = await file.read()
         if len(content) > MAX_SIZE:
@@ -160,6 +164,39 @@ async def get_task_status(task_id: str, db: AsyncSession = Depends(get_db)):
     return {"status": status}
 
 
+@router.delete("/{task_id}", dependencies=[Depends(require_api_key)])
+async def cancel_task(task_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        update(Task)
+        .where(Task.id == task_id, Task.status.in_(["planning", "pending", "running"]))
+        .values(status="cancelled")
+    )
+    await db.commit()
+    if result.rowcount == 0:
+        current_status = await db.scalar(select(Task.status).where(Task.id == task_id))
+        if current_status is None:
+            raise HTTPException(404, "任务不存在")
+        if current_status == "cancelled":
+            return {"status": "cancelled"}
+        raise HTTPException(400, f"任务状态 {current_status} 无法取消")
+    return {"status": "cancelled"}
+
+
+async def _is_task_cancelled(db: AsyncSession, task_id: str) -> bool:
+    status = await db.scalar(select(Task.status).where(Task.id == task_id))
+    return status == "cancelled"
+
+
+async def _update_task_unless_cancelled(db: AsyncSession, task_id: str, **values) -> bool:
+    result = await db.execute(
+        update(Task)
+        .where(Task.id == task_id, Task.status != "cancelled")
+        .values(**values)
+    )
+    await db.commit()
+    return result.rowcount > 0
+
+
 async def _execute_task(
     task_id: str,
     selected_modules: list[str],
@@ -168,17 +205,40 @@ async def _execute_task(
     """后台执行任务（单机 MVP，无自动重试/恢复）"""
     from app.models.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
+        emitter = None
         try:
             result = await db.execute(select(Task).where(Task.id == task_id))
             task = result.scalar_one_or_none()
             if not task:
                 return
+            if task.status == "cancelled":
+                return
+
+            MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT_TASKS", "3"))
+            running_count = await db.scalar(
+                select(func.count()).select_from(Task).where(Task.status == "running")
+            )
+            if (running_count or 0) >= MAX_CONCURRENT:
+                error_message = f"当前运行中的任务已达上限（{MAX_CONCURRENT}），请稍后重试"
+                if await _update_task_unless_cancelled(
+                    db,
+                    task_id,
+                    status="failed",
+                    error_message=error_message,
+                ):
+                    emitter = EventEmitter(task_id=task_id, db=db, redis_client=redis_client)
+                    await emitter.emit_task_error(error_message)
+                return
 
             # 标记运行中
-            await db.execute(
-                update(Task).where(Task.id == task_id).values(status="running")
+            run_result = await db.execute(
+                update(Task)
+                .where(Task.id == task_id, Task.status.in_(["pending", "running"]))
+                .values(status="running")
             )
             await db.commit()
+            if run_result.rowcount == 0 or await _is_task_cancelled(db, task_id):
+                return
 
             await db.execute(delete(TaskResult).where(TaskResult.task_id == task_id))
             await db.execute(delete(TaskEvent).where(TaskEvent.task_id == task_id))
@@ -202,13 +262,32 @@ async def _execute_task(
                 data_summary = parse_content(file_content, os.path.basename(task.input_file))
 
             # 执行 Agent 模块
-            agent_results = await orchestrate(
-                task_description=task.input_text or "",
-                selected_modules=selected_modules,
-                data_summary=data_summary,
-                feishu_context=task.feishu_context,
-                emitter=emitter,
-            )
+            TASK_TIMEOUT = int(os.getenv("TASK_TIMEOUT_SECONDS", "300"))
+            try:
+                agent_results = await asyncio.wait_for(
+                    orchestrate(
+                        task_description=task.input_text or "",
+                        selected_modules=selected_modules,
+                        data_summary=data_summary,
+                        feishu_context=task.feishu_context,
+                        emitter=emitter,
+                    ),
+                    timeout=TASK_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                error_message = f"任务执行超时（超过 {TASK_TIMEOUT} 秒）"
+                if emitter is not None and not await _is_task_cancelled(db, task_id):
+                    await emitter.emit_task_error(error_message)
+                await _update_task_unless_cancelled(
+                    db,
+                    task_id,
+                    status="failed",
+                    error_message=error_message,
+                )
+                return
+
+            if await _is_task_cancelled(db, task_id):
+                return
 
             # 保存结果
             for ar in agent_results:
@@ -231,26 +310,25 @@ async def _execute_task(
             if not summary and agent_results:
                 summary = agent_results[-1].sections[0].content[:300] if agent_results[-1].sections else "分析完成"
 
-            await db.execute(
-                update(Task).where(Task.id == task_id).values(
-                    status="done",
-                    result_summary=summary,
-                )
-            )
-            await db.commit()
+            if not await _update_task_unless_cancelled(
+                db,
+                task_id,
+                status="done",
+                result_summary=summary,
+            ):
+                return
             await emitter.emit_task_done(summary)
 
         except Exception as e:
             logger.error(f"Task {task_id} failed: {e}", exc_info=True)
             try:
-                await db.execute(
-                    update(Task).where(Task.id == task_id).values(
-                        status="failed",
-                        error_message=str(e),
-                    )
-                )
-                await db.commit()
-                emitter2 = EventEmitter(task_id=task_id, db=db)
-                await emitter2.emit_task_error(str(e))
+                if await _update_task_unless_cancelled(
+                    db,
+                    task_id,
+                    status="failed",
+                    error_message=str(e),
+                ):
+                    emitter2 = EventEmitter(task_id=task_id, db=db)
+                    await emitter2.emit_task_error(str(e))
             except Exception:
                 pass

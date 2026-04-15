@@ -43,6 +43,11 @@ export async function getTaskStatus(taskId: string): Promise<{ status: string }>
   return res.data;
 }
 
+export async function cancelTask(taskId: string): Promise<{ status: string }> {
+  const res = await api.delete<{ status: string }>(`/api/v1/tasks/${taskId}`);
+  return res.data;
+}
+
 export async function listTasks(): Promise<TaskListItem[]> {
   const resp = await api.get('/api/v1/tasks');
   return resp.data;

@@ -82,7 +82,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")]
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:8080").split(",")]
 
 app.add_middleware(
     CORSMiddleware,

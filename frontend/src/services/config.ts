@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const LLM_CONFIGURED_STORAGE_KEY = 'multiagent-lark.llm-configured';
 
 const api = axios.create({ baseURL: BASE_URL });
 
@@ -58,4 +59,14 @@ export async function testFeishu(
     region,
   });
   return response.data;
+}
+
+export function setStoredLLMConfigured(configured: boolean): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LLM_CONFIGURED_STORAGE_KEY, configured ? 'true' : 'false');
+}
+
+export function isStoredLLMConfigured(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(LLM_CONFIGURED_STORAGE_KEY) === 'true';
 }

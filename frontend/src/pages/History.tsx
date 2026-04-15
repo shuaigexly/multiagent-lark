@@ -14,13 +14,14 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 function formatRelativeTime(v: string) {
-  const diff = new Date(v).getTime() - Date.now();
+  const diff = Date.now() - new Date(v).getTime();
   const fmt = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+  if (Math.abs(diff) < 60000) return '刚刚';
   const m = Math.round(diff / 60000);
-  if (Math.abs(m) < 60) return fmt.format(m, 'minute');
+  if (Math.abs(m) < 60) return fmt.format(-m, 'minute');
   const h = Math.round(m / 60);
-  if (Math.abs(h) < 24) return fmt.format(h, 'hour');
-  return fmt.format(Math.round(h / 24), 'day');
+  if (Math.abs(h) < 24) return fmt.format(-h, 'hour');
+  return fmt.format(-Math.round(h / 24), 'day');
 }
 
 export default function History() {

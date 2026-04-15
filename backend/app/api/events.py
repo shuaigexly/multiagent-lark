@@ -2,6 +2,8 @@
 import asyncio
 import json
 import logging
+import os
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
@@ -12,6 +14,7 @@ from app.models.database import AsyncSessionLocal, Task, TaskEvent
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["events"])
 logger = logging.getLogger(__name__)
+MAX_SSE_SECONDS = int(os.getenv("MAX_SSE_SECONDS", "600"))
 
 
 @router.get("/{task_id}/events", dependencies=[Depends(require_api_key)])
@@ -30,10 +33,19 @@ async def task_events(task_id: str, request: Request):
 
 async def _event_generator(task_id: str, request: Request):
     last_seq = 0
+    start_time = time.monotonic()
 
     while True:
         if await request.is_disconnected():
             return
+
+        if time.monotonic() - start_time > MAX_SSE_SECONDS:
+            yield {
+                "data": json.dumps(
+                    {"event_type": "stream.end", "status": "timeout"}
+                )
+            }
+            break
 
         async with AsyncSessionLocal() as db:
             events_result = await db.execute(

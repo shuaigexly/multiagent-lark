@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { getConfig, saveConfigs, testFeishu, testLLM, type ConfigMap, type ConnectionTestResult } from '../services/config';
+import { getConfig, saveConfigs, setStoredLLMConfigured, testFeishu, testLLM, type ConfigMap, type ConnectionTestResult } from '../services/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,6 +38,7 @@ export default function Settings() {
 
   const load = async () => {
     const d = await getConfig(); setConfig(d);
+    setStoredLLMConfigured(Boolean(d.llm_api_key?.set));
     setLlmProvider(d.llm_provider?.value || 'openai_compatible');
     setLlmBaseUrl(d.llm_base_url?.value || 'https://api.openai.com/v1');
     setLlmModel(d.llm_model?.value || 'gpt-4o-mini');
@@ -106,6 +107,12 @@ export default function Settings() {
           </span>
         </div>
       </div>
+
+      {!llmOk && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <strong>开始使用 AI 工作台</strong>：请先填写并保存 LLM API Key，飞书配置为可选。
+        </div>
+      )}
 
       {error && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
 

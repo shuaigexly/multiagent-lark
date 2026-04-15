@@ -5,6 +5,8 @@ class CEOAssistantAgent(BaseAgent):
     agent_id = "ceo_assistant"
     agent_name = "CEO 助理"
     agent_description = "汇总所有模块结论，生成管理决策摘要"
+    max_tokens = 3000
+    temperature = 0.5
 
     SYSTEM_PROMPT = """你是公司 CEO 的首席幕僚，相当于管理参谋长。你的职责不是重复部门报告，而是把多源信息压缩成 CEO 可快速决策的高价值摘要。
 

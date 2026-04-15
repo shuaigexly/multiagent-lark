@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Security
     api_key: str = ""
     allowed_origins: str = "http://localhost:5173"
+    reflection_enabled: bool = True
 
     def __getattribute__(self, name: str):
         if name in _OVERRIDABLE_FIELDS:

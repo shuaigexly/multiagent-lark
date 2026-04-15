@@ -15,7 +15,7 @@ class DataSummary(BaseModel):
     columns: list[str]        # CSV 列名（纯文本则为空）
     row_count: int            # 行数（纯文本则为段落数）
     basic_stats: dict         # pandas describe() 结果（数值列）
-    content_type: str         # "csv" | "text"
+    content_type: str         # "csv" | "text" | "markdown"
     full_text: str            # 完整内容（限 8000 字符）
 
 
@@ -51,7 +51,7 @@ def parse_csv(content: str) -> DataSummary:
     )
 
 
-def parse_text(content: str) -> DataSummary:
+def parse_text(content: str, content_type: str = "text") -> DataSummary:
     paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
     preview = "\n\n".join(paragraphs[:5])
     return DataSummary(
@@ -59,14 +59,17 @@ def parse_text(content: str) -> DataSummary:
         columns=[],
         row_count=len(paragraphs),
         basic_stats={},
-        content_type="text",
+        content_type=content_type,
         full_text=content[:8000],
     )
 
 
 def parse_content(content: str, filename: Optional[str] = None) -> DataSummary:
-    if filename and filename.lower().endswith(".csv"):
+    lowered_filename = filename.lower() if filename else ""
+    if lowered_filename.endswith(".csv"):
         return parse_csv(content)
+    if lowered_filename.endswith(".md"):
+        return parse_text(content, content_type="markdown")
     # 简单启发：第一行有逗号且行数 > 2 视为 CSV
     lines = content.strip().splitlines()
     if len(lines) > 2 and lines[0].count(",") >= 2:

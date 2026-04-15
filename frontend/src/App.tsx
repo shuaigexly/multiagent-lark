@@ -7,6 +7,7 @@ import AppLayout from "./components/AppLayout";
 import Index from "./pages/Index";
 import ResultView from "./pages/ResultView";
 import History from "./pages/History";
+import FeishuWorkspace from "./pages/FeishuWorkspace";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/results/:taskId" element={<ResultView />} />
             <Route path="/history" element={<History />} />
+            <Route path="/workspace" element={<FeishuWorkspace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

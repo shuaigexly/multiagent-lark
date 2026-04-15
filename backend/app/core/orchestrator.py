@@ -7,7 +7,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from app.agents.base_agent import AgentResult
+from app.agents.base_agent import AgentResult, ResultSection
 from app.agents.registry import AGENT_DEPENDENCIES, AGENT_REGISTRY, SEQUENTIAL_LAST
 from app.core.data_parser import DataSummary
 from app.core.event_emitter import EventEmitter
@@ -22,7 +22,7 @@ async def run_agent_safe(
     upstream_results: Optional[list[AgentResult]],
     feishu_context: Optional[dict],
     emitter: EventEmitter,
-) -> Optional[AgentResult]:
+) -> AgentResult | None:
     agent = AGENT_REGISTRY.get(agent_id)
     if not agent:
         logger.warning(f"Unknown agent: {agent_id}")
@@ -53,7 +53,17 @@ async def run_agent_safe(
 
     logger.error(f"Agent {agent_id} failed after 3 attempts: {last_err}")
     await emitter.emit_module_failed(agent.agent_id, agent.agent_name, str(last_err))
-    return None
+    fallback = AgentResult(
+        agent_id=agent_id,
+        agent_name=agent.agent_name,
+        sections=[ResultSection(
+            title="执行状态",
+            content=f"[{agent.agent_name}] 模块执行失败，已跳过。错误信息：{last_err}"
+        )],
+        action_items=[],
+        raw_output=f"FAILED: {last_err}",
+    )
+    return fallback
 
 
 async def orchestrate(

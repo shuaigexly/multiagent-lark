@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, ChevronDown, Loader2, FileText, BarChart3, MessageSquare, CheckSquare, Check } from 'lucide-react';
@@ -7,7 +7,7 @@ import { AGENT_PERSONAS } from '../components/ModuleCard';
 import { getTaskResults, publishTask } from '../services/api';
 import { getChats } from '../services/feishu';
 import type { FeishuChat } from '../services/feishu';
-import type { TaskResultsResponse } from '../services/types';
+import type { AgentResult, TaskResultsResponse } from '../services/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -16,6 +16,7 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   running: { label: '执行中', cls: 'bg-warning/10 text-warning' },
   failed: { label: '失败', cls: 'bg-destructive/10 text-destructive' },
   pending: { label: '等待中', cls: 'bg-secondary text-secondary-foreground' },
+  cancelled: { label: '已取消', cls: 'bg-secondary text-secondary-foreground' },
 };
 
 const PUBLISH_OPTIONS = [
@@ -32,6 +33,7 @@ type ActionTaskState = 'idle' | 'loading' | 'success' | 'error';
 export default function ResultView() {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
+  const copyResetTimerRef = useRef<number | null>(null);
   const [data, setData] = useState<TaskResultsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -42,6 +44,7 @@ export default function ResultView() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionTaskStates, setActionTaskStates] = useState<Map<string, ActionTaskState>>(new Map());
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!taskId) { setLoading(false); return; }
@@ -51,6 +54,10 @@ export default function ResultView() {
       .catch(() => setError('加载结果失败'))
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current) window.clearTimeout(copyResetTimerRef.current);
+  }, []);
 
   const setActionTaskState = (item: string, state: ActionTaskState) => {
     setActionTaskStates((prev) => {
@@ -85,6 +92,30 @@ export default function ResultView() {
     finally { setPublishing(false); }
   };
 
+  const buildMarkdown = (results: AgentResult[]) => results.map((result) => {
+    const sections = result.sections
+      .map((section) => `## ${section.title}\n\n${section.content}`)
+      .join('\n\n');
+    const actionItems = result.action_items.length > 0
+      ? `\n\n## 行动建议\n${result.action_items.map((item) => `- ${item}`).join('\n')}`
+      : '';
+
+    return `# ${result.agent_name}\n\n${sections}${actionItems}\n\n---`;
+  }).join('\n\n');
+
+  const handleCopyMarkdown = async () => {
+    if (!data || data.agent_results.length === 0) return;
+
+    try {
+      await navigator.clipboard.writeText(buildMarkdown(data.agent_results));
+      setCopied(true);
+      if (copyResetTimerRef.current) window.clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('复制失败，请检查浏览器权限');
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh] gap-2 text-sm text-muted-foreground">
       <Loader2 className="h-4 w-4 animate-spin" />正在加载...
@@ -114,7 +145,12 @@ export default function ResultView() {
             <h1 className="text-lg font-semibold text-foreground">{data.task_type_label}结果报告</h1>
             <p className="text-[11px] text-muted-foreground mt-0.5">ID: {data.task_id}</p>
           </div>
-          <span className={`rounded px-2 py-0.5 text-xs font-medium ${status.cls}`}>{status.label}</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopyMarkdown} disabled={data.agent_results.length === 0}>
+              {copied ? '已复制 ✓' : '复制 Markdown'}
+            </Button>
+            <span className={`rounded px-2 py-0.5 text-xs font-medium ${status.cls}`}>{status.label}</span>
+          </div>
         </div>
       </div>
 

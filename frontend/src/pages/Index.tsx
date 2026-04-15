@@ -4,7 +4,8 @@ import { Check, Upload, FileText, X, Loader2, ArrowRight, Info } from 'lucide-re
 import ModuleCard from '../components/ModuleCard';
 import ExecutionTimeline from '../components/ExecutionTimeline';
 import ContextSuggestions, { type Suggestion } from '../components/ContextSuggestions';
-import { confirmTask, createSSEConnection, getTaskStatus, listAgents, submitTask } from '../services/api';
+import { cancelTask, confirmTask, createSSEConnection, getTaskStatus, listAgents, submitTask } from '../services/api';
+import { isStoredLLMConfigured } from '../services/config';
 import { getFeishuContext, getChats, type FeishuContext } from '../services/feishu';
 import type { AgentInfo, SSEEvent, TaskPlanResponse } from '../services/types';
 import { Button } from '@/components/ui/button';
@@ -132,6 +133,7 @@ export default function Workbench() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [ctxLoading, setCtxLoading] = useState(true);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     listAgents().then(setAgents).catch(() => setError('加载团队成员失败'));
@@ -181,6 +183,7 @@ export default function Workbench() {
 
   const handleSubmit = async () => {
     if (!inputText.trim() && !file) { setError('请输入任务描述'); return; }
+    if (!isStoredLLMConfigured()) { setError('请先前往「设置」页面配置 LLM API Key'); return; }
     setError(null); setEvents([]);
     if (selectedModules.length > 0) {
       setPlan(null); setLoading(true); setStep('running');
@@ -192,6 +195,26 @@ export default function Workbench() {
     try { const r = await submitTask(inputText, file ?? undefined, feishuCtx ?? undefined); setPlan(r); setTaskId(r.task_id); setSelectedModules(r.selected_modules); setStep('confirm'); }
     catch { setStep('input'); setError('AI 组队失败'); }
     finally { setLoading(false); }
+  };
+
+  const handleCancel = async () => {
+    if (!taskId || cancelling) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      await cancelTask(taskId);
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      setStep('input');
+      setLoading(false);
+      setEvents([]);
+      setPlan(null);
+      setTaskId(null);
+    } catch {
+      setError('取消任务失败');
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const handleConfirm = async () => {
@@ -293,6 +316,7 @@ export default function Workbench() {
             className="w-full min-h-[100px] resize-none rounded-md border border-input bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 transition-colors"
             placeholder="例如：分析本月经营数据，识别收入波动、成本压力，并给出下周管理动作建议。"
             value={inputText}
+            maxLength={5000}
             disabled={formLocked}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
@@ -372,14 +396,21 @@ export default function Workbench() {
           <div className="text-xs text-muted-foreground">
             {selectedModules.length > 0 ? `已选择 ${selectedModules.length} 名成员` : '未指定成员，AI 将自动组队'}
           </div>
-          <Button
-            onClick={step === 'confirm' ? handleConfirm : handleSubmit}
-            disabled={loading || step === 'running' || step === 'done' || (step === 'confirm' && selectedModules.length === 0)}
-          >
-            {loading && step === 'planning' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 组队中</> :
-             loading && step === 'running' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 执行中</> :
-             <>下达指令 <ArrowRight className="h-3.5 w-3.5" /></>}
-          </Button>
+          <div className="flex items-center gap-2">
+            {step === 'running' && (
+              <Button variant="outline" onClick={handleCancel} disabled={cancelling}>
+                {cancelling ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 取消中</> : '取消任务'}
+              </Button>
+            )}
+            <Button
+              onClick={step === 'confirm' ? handleConfirm : handleSubmit}
+              disabled={loading || step === 'running' || step === 'done' || (step === 'confirm' && selectedModules.length === 0)}
+            >
+              {loading && step === 'planning' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 组队中</> :
+               loading && step === 'running' ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 执行中</> :
+               <>下达指令 <ArrowRight className="h-3.5 w-3.5" /></>}
+            </Button>
+          </div>
         </div>
       </div>
 
