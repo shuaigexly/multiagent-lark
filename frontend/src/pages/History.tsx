@@ -104,6 +104,20 @@ export default function History() {
     }
   }, [debouncedSearch, canUseServerSearch, usingServerSearch]);
 
+  useEffect(() => {
+    const hasActiveTasks = !loading && tasks.some((task) => ACTIVE_STATUSES.has(task.status));
+
+    if (!hasActiveTasks) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadTasks();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [tasks, loading]);
+
   const filteredTasks = useMemo(() => {
     const keyword = debouncedSearch.toLowerCase();
 

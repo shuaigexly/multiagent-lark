@@ -5,6 +5,7 @@ import { getConfig, saveConfigs, setStoredLLMConfigured, testFeishu, testLLM, ty
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/components/ui/use-toast';
 
 type SaveSection = 'llm' | 'feishu' | null;
 
@@ -27,6 +28,7 @@ export default function Settings() {
   const [saving, setSaving] = useState<SaveSection>(null);
   const [testingLLM, setTestingLLM] = useState(false);
   const [testingFeishu, setTestingFeishu] = useState(false);
+  const [testingBot, setTestingBot] = useState(false);
   const [llmProvider, setLlmProvider] = useState('openai_compatible');
   const [llmApiKey, setLlmApiKey] = useState('');
   const [llmBaseUrl, setLlmBaseUrl] = useState('https://api.openai.com/v1');
@@ -38,6 +40,7 @@ export default function Settings() {
   const [feishuBotEncryptKey, setFeishuBotEncryptKey] = useState('');
   const [llmTest, setLlmTest] = useState<ConnectionTestResult | null>(null);
   const [feishuTest, setFeishuTest] = useState<ConnectionTestResult | null>(null);
+  const [botTest, setBotTest] = useState<ConnectionTestResult | null>(null);
   const [taskAuthorized, setTaskAuthorized] = useState(false);
   const [authorizingTask, setAuthorizingTask] = useState(false);
   const [searchParams] = useSearchParams();
@@ -77,7 +80,7 @@ export default function Settings() {
   };
 
   const saveFeishu = async () => {
-    setSaving('feishu'); setError(null); setFeishuTest(null);
+    setSaving('feishu'); setError(null); setFeishuTest(null); setBotTest(null);
     try {
       const c: { key: string; value: string | null }[] = [{ key: 'feishu_region', value: feishuRegion.trim() }, { key: 'feishu_app_id', value: feishuAppId.trim() || null }];
       if (feishuAppSecret.trim()) c.push({ key: 'feishu_app_secret', value: feishuAppSecret.trim() });
@@ -119,6 +122,30 @@ export default function Settings() {
     try { setFeishuTest(await testFeishu(feishuAppId.trim(), feishuAppSecret.trim(), feishuRegion)); }
     catch (e) { setFeishuTest({ ok: false, message: getErr(e, '测试失败') }); }
     finally { setTestingFeishu(false); }
+  };
+
+  const doTestBot = async () => {
+    setTestingBot(true); setBotTest(null);
+    try {
+      const response = await fetch(`${BASE_URL}/api/v1/config/test-bot`, { method: 'POST' });
+      const result = await response.json() as ConnectionTestResult;
+      setBotTest(result);
+      toast({
+        title: result.ok ? 'Bot 测试成功' : 'Bot 测试失败',
+        description: result.message,
+        variant: result.ok ? 'default' : 'destructive',
+      });
+    } catch (e) {
+      const result = { ok: false, message: getErr(e, '测试失败') };
+      setBotTest(result);
+      toast({
+        title: 'Bot 测试失败',
+        description: result.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setTestingBot(false);
+    }
   };
 
   if (loading) return (
@@ -254,6 +281,16 @@ export default function Settings() {
                 </code>
               </p>
               <p>订阅事件：<code className="font-mono">im.message.receive_v1</code></p>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={doTestBot} disabled={testingBot}>
+                {testingBot ? <Loader2 className="h-3 w-3 animate-spin" /> : null}测试 Bot
+              </Button>
+              {botTest && (
+                <span className={`text-xs flex items-center gap-1 ${botTest.ok ? 'text-success' : 'text-destructive'}`}>
+                  {botTest.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}{botTest.message}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">

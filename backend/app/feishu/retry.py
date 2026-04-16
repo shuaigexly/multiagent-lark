@@ -41,7 +41,10 @@ async def with_retry(
                 try:
                     from app.feishu.user_token import refresh_user_token
 
-                    logger.warning("Feishu token expired; refreshing user token before retry")
+                    logger.warning(
+                        "Feishu token expired; refreshing user token before retry",
+                        extra={"error": str(e)},
+                    )
                     await refresh_user_token()
                     continue
                 except Exception as refresh_exc:
@@ -51,13 +54,18 @@ async def with_retry(
                     )
 
             if _is_client_error(e):
+                logger.warning(
+                    "4xx fast-fail, not retrying",
+                    extra={"error": str(e)},
+                )
                 raise
 
             if attempt < max_attempts - 1:
                 delay = base_delay * (2 ** attempt)
                 logger.warning(
                     f"Feishu call failed (attempt {attempt+1}/{max_attempts}): {e}. "
-                    f"Retrying in {delay}s"
+                    f"Retrying in {delay}s",
+                    extra={"attempt": attempt + 1, "error": str(e)},
                 )
                 await asyncio.sleep(delay)
     raise last_exc

@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends
 from openai import AsyncOpenAI
 from pydantic import BaseModel, field_validator, model_validator
@@ -270,3 +271,21 @@ async def test_feishu(body: FeishuTestRequest):
         return {"ok": True, "message": "飞书连接成功"}
     except Exception as exc:
         return {"ok": False, "message": str(exc)}
+
+
+@router.post("/test-bot", dependencies=[Depends(require_api_key)])
+async def test_bot():
+    challenge = "test_ping"
+    try:
+        async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=5.0) as client:
+            response = await client.post(
+                "/api/v1/feishu/bot/event",
+                json={"type": "url_verification", "challenge": challenge},
+            )
+        payload = response.json()
+    except Exception:
+        payload = {}
+
+    if payload.get("challenge") == challenge:
+        return {"ok": True, "message": "Bot 事件订阅配置正常"}
+    return {"ok": False, "message": "Bot 未响应 challenge，请检查 Verification Token 配置"}

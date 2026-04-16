@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, ChevronDown, Loader2, FileText, BarChart3, MessageSquare, Layers, CheckSquare, Check, Presentation } from 'lucide-react';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import FeishuAssetCard from '../components/FeishuAssetCard';
 import { AGENT_PERSONAS } from '../components/ModuleCard';
 import { getTaskResults, publishTask } from '../services/api';
@@ -181,10 +182,12 @@ export default function ResultView() {
 
       {/* Summary */}
       {data.result_summary && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">摘要</div>
-          <p className="text-sm text-foreground leading-relaxed pl-3 border-l-2 border-primary">{data.result_summary}</p>
-        </div>
+        <ErrorBoundary>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="text-xs font-medium text-muted-foreground mb-1.5">摘要</div>
+            <p className="text-sm text-foreground leading-relaxed pl-3 border-l-2 border-primary">{data.result_summary}</p>
+          </div>
+        </ErrorBoundary>
       )}
 
       {/* Agent results */}
@@ -194,150 +197,160 @@ export default function ResultView() {
           const open = expandedAgent === result.agent_id;
           const p = AGENT_PERSONAS[result.agent_id];
           return (
-            <div key={result.agent_id} className="rounded-lg border border-border bg-card overflow-hidden">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-secondary/50 transition-colors"
-                onClick={() => setExpandedAgent(open ? null : result.agent_id)}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium text-primary-foreground"
-                    style={{ backgroundColor: p?.color ?? '#636366' }}>
-                    {p?.avatar ?? result.agent_name[0]}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-foreground">{p?.name ?? result.agent_name}</div>
-                    <div className="text-[11px] text-muted-foreground">{result.sections.length} 章节{result.action_items.length > 0 ? ` · ${result.action_items.length} 行动项` : ''}</div>
-                  </div>
-                </div>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
-              </button>
-              {open && (
-                <div className="px-4 pb-4 border-t border-border space-y-3 pt-3">
-                  {result.sections.map((s) => (
-                    <div key={s.title}>
-                      <div className="text-xs font-medium text-foreground mb-1">{s.title}</div>
-                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{s.content}</p>
+            <ErrorBoundary key={result.agent_id}>
+              <div className="rounded-lg border border-border bg-card overflow-hidden">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-secondary/50 transition-colors"
+                  onClick={() => setExpandedAgent(open ? null : result.agent_id)}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium text-primary-foreground"
+                      style={{ backgroundColor: p?.color ?? '#636366' }}>
+                      {p?.avatar ?? result.agent_name[0]}
                     </div>
-                  ))}
-                  {result.action_items.length > 0 && (
                     <div>
-                      <div className="text-xs font-medium text-foreground mb-1">行动项</div>
-                      <ol className="space-y-1.5">
-                        {result.action_items.map((item) => {
-                          const actionTaskState = actionTaskStates.get(item) ?? 'idle';
-
-                          return (
-                            <li key={item} className="flex items-start gap-2">
-                              <span className="flex-1 text-sm text-muted-foreground">{item}</span>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  disabled={actionTaskState === 'loading'}
-                                  onClick={() => void createActionTask(item)}
-                                  className="text-[11px] border border-border rounded px-2 py-0.5 hover:border-primary hover:text-primary transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {actionTaskState === 'loading' ? '创建中...' : '→ 飞书任务'}
-                                </button>
-                                {actionTaskState === 'success' && (
-                                  <span className="text-[11px] text-success">✓ 已创建</span>
-                                )}
-                                {actionTaskState === 'error' && (
-                                  <span className="text-[11px] text-destructive">✗ 失败</span>
-                                )}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ol>
+                      <div className="text-sm font-medium text-foreground">{p?.name ?? result.agent_name}</div>
+                      <div className="text-[11px] text-muted-foreground">{result.sections.length} 章节{result.action_items.length > 0 ? ` · ${result.action_items.length} 行动项` : ''}</div>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+                {open && (
+                  <div className="px-4 pb-4 border-t border-border space-y-3 pt-3">
+                    {result.sections.map((s) => (
+                      <div key={s.title}>
+                        <div className="text-xs font-medium text-foreground mb-1">{s.title}</div>
+                        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{s.content}</p>
+                      </div>
+                    ))}
+                    {result.action_items.length > 0 && (
+                      <div>
+                        <div className="text-xs font-medium text-foreground mb-1">行动项</div>
+                        <ol className="space-y-1.5">
+                          {result.action_items.map((item) => {
+                            const actionTaskState = actionTaskStates.get(item) ?? 'idle';
+
+                            return (
+                              <li key={item} className="flex items-start gap-2">
+                                <span className="flex-1 text-sm text-muted-foreground">{item}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={actionTaskState === 'loading'}
+                                    onClick={() => void createActionTask(item)}
+                                    className="text-[11px] border border-border rounded px-2 py-0.5 hover:border-primary hover:text-primary transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {actionTaskState === 'loading' ? '创建中...' : '→ 飞书任务'}
+                                  </button>
+                                  {actionTaskState === 'success' && (
+                                    <span className="text-[11px] text-success">✓ 已创建</span>
+                                  )}
+                                  {actionTaskState === 'error' && (
+                                    <span className="text-[11px] text-destructive">✗ 失败</span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </ErrorBoundary>
           );
         })}
       </div>
 
       {/* Published */}
       {data.published_assets.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium text-foreground">已发布到飞书</h2>
-          <div className="space-y-1.5">
-            {data.published_assets.map((a, i) => <FeishuAssetCard key={`${a.type}-${a.id ?? i}`} asset={a} />)}
+        <ErrorBoundary>
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-foreground">已发布到飞书</h2>
+            <div className="space-y-1.5">
+              {data.published_assets.map((a, i) => (
+                <ErrorBoundary key={`${a.type}-${a.id ?? i}`}>
+                  <FeishuAssetCard asset={a} />
+                </ErrorBoundary>
+              ))}
+            </div>
           </div>
-        </div>
+        </ErrorBoundary>
       )}
 
       {/* Publish */}
       {data.status === 'done' && (
-        <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-          <div>
-            <h2 className="text-sm font-medium text-foreground">发布到飞书</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">选择发布渠道</p>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            {PUBLISH_OPTIONS.map((opt) => {
-              const sel = publishTypes.includes(opt.value);
-              const Icon = opt.icon;
-              return (
-                <button key={opt.value} type="button"
-                  onClick={() => setPublishTypes(c => c.includes(opt.value) ? c.filter(v => v !== opt.value) : [...c, opt.value])}
-                  className={`relative flex flex-col gap-1.5 rounded-md border p-3 text-left transition-colors
-                    ${sel ? 'border-primary bg-accent' : 'border-border hover:bg-secondary/50'}`}
+        <ErrorBoundary>
+          <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+            <div>
+              <h2 className="text-sm font-medium text-foreground">发布到飞书</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">选择发布渠道</p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {PUBLISH_OPTIONS.map((opt) => {
+                const sel = publishTypes.includes(opt.value);
+                const Icon = opt.icon;
+                return (
+                  <button key={opt.value} type="button"
+                    onClick={() => setPublishTypes(c => c.includes(opt.value) ? c.filter(v => v !== opt.value) : [...c, opt.value])}
+                    className={`relative flex flex-col gap-1.5 rounded-md border p-3 text-left transition-colors
+                      ${sel ? 'border-primary bg-accent' : 'border-border hover:bg-secondary/50'}`}
+                  >
+                    {sel && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary flex items-center justify-center"><Check className="h-2.5 w-2.5 text-primary-foreground" /></div>}
+                    <Icon className={`h-4 w-4 ${sel ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <div className="text-xs font-medium text-foreground">{opt.label}</div>
+                    <div className="text-[11px] text-muted-foreground">{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1 block">文档标题</label>
+                <Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="4 月经营分析周报" />
+              </div>
+              <div>
+                <label className={`text-[11px] mb-1 block ${needsFeishuTarget ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                  群聊{missingFeishuTarget ? <span className="text-destructive ml-0.5">*</span> : '（可选）'}
+                </label>
+                <select
+                  value={chatId}
+                  onChange={(e) => setChatId(e.target.value)}
+                  className={`h-9 w-full rounded-md border bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring
+                    ${missingFeishuTarget ? 'border-destructive focus:ring-destructive' : 'border-input'}`}
                 >
-                  {sel && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary flex items-center justify-center"><Check className="h-2.5 w-2.5 text-primary-foreground" /></div>}
-                  <Icon className={`h-4 w-4 ${sel ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <div className="text-xs font-medium text-foreground">{opt.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{opt.desc}</div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] text-muted-foreground mb-1 block">文档标题</label>
-              <Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="4 月经营分析周报" />
+                  <option value="">请选择群聊</option>
+                  {chats.map((c) => (
+                    <option key={c.chat_id} value={c.chat_id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {useDmFallback && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    未填写群 ID，将通过私信发给已授权飞书用户
+                  </p>
+                )}
+                {missingFeishuTarget && (
+                  <p className="text-[11px] text-destructive mt-0.5">发送消息/卡片需填写群 ID，或先完成飞书 OAuth 授权</p>
+                )}
+              </div>
             </div>
-            <div>
-              <label className={`text-[11px] mb-1 block ${needsFeishuTarget ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                群聊{missingFeishuTarget ? <span className="text-destructive ml-0.5">*</span> : '（可选）'}
-              </label>
-              <select
-                value={chatId}
-                onChange={(e) => setChatId(e.target.value)}
-                className={`h-9 w-full rounded-md border bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring
-                  ${missingFeishuTarget ? 'border-destructive focus:ring-destructive' : 'border-input'}`}
-              >
-                <option value="">请选择群聊</option>
-                {chats.map((c) => (
-                  <option key={c.chat_id} value={c.chat_id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {useDmFallback && (
-                <p className="text-xs text-amber-600 mt-1">
-                  未填写群 ID，将通过私信发给已授权飞书用户
-                </p>
-              )}
+            <div className="flex items-center justify-end gap-2">
               {missingFeishuTarget && (
-                <p className="text-[11px] text-destructive mt-0.5">发送消息/卡片需填写群 ID，或先完成飞书 OAuth 授权</p>
+                <span className="text-xs text-destructive">请先填写群 ID 或完成飞书授权，否则无法发布</span>
               )}
+              <Button
+                disabled={publishing || publishTypes.length === 0 || missingFeishuTarget}
+                onClick={handlePublish}
+              >
+                {publishing ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />发布中</> : '发布到飞书'}
+              </Button>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2">
-            {missingFeishuTarget && (
-              <span className="text-xs text-destructive">请先填写群 ID 或完成飞书授权，否则无法发布</span>
-            )}
-            <Button
-              disabled={publishing || publishTypes.length === 0 || missingFeishuTarget}
-              onClick={handlePublish}
-            >
-              {publishing ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />发布中</> : '发布到飞书'}
-            </Button>
-          </div>
-        </div>
+        </ErrorBoundary>
       )}
     </div>
   );

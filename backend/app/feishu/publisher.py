@@ -79,16 +79,25 @@ async def publish_results(
             )
             db.add(asset)
         except Exception as e:
-            logger.error(f"飞书文档发布失败: {e}")
+            logger.error(
+                f"飞书文档发布失败: {e}",
+                extra={"task_id": task_id, "asset_type": "doc", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(doc): {db_err}")
+                logger.error(
+                    f"DB提交失败(doc): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "doc", "error": str(db_err)},
+                )
             else:
                 published.append({"type": "doc", "title": title, "url": result["url"]})
-                logger.info(f"飞书文档发布成功: {result['url']}")
+                logger.info(
+                    f"飞书文档发布成功: {result['url']}",
+                    extra={"task_id": task_id, "asset_type": "doc"},
+                )
 
     # 多维表格
     if "bitable" in asset_types:
@@ -108,15 +117,25 @@ async def publish_results(
             )
             db.add(asset)
         except Exception as e:
-            logger.error(f"多维表格发布失败: {e}")
+            logger.error(
+                f"多维表格发布失败: {e}",
+                extra={"task_id": task_id, "asset_type": "bitable", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(bitable): {db_err}")
+                logger.error(
+                    f"DB提交失败(bitable): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "bitable", "error": str(db_err)},
+                )
             else:
                 published.append({"type": "bitable", "title": bitable_title, "url": bitable_result["url"]})
+                logger.info(
+                    f"多维表格发布成功: {bitable_result['url']}",
+                    extra={"task_id": task_id, "asset_type": "bitable"},
+                )
 
     # 演示文稿
     if "slides" in asset_types:
@@ -138,15 +157,25 @@ async def publish_results(
             )
             db.add(asset)
         except Exception as e:
-            logger.error(f"演示文稿发布失败: {e}")
+            logger.error(
+                f"演示文稿发布失败: {e}",
+                extra={"task_id": task_id, "asset_type": "slides", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(slides): {db_err}")
+                logger.error(
+                    f"DB提交失败(slides): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "slides", "error": str(db_err)},
+                )
             else:
                 published.append({"type": "slides", "title": slides_title, "url": slides_result["url"]})
+                logger.info(
+                    f"演示文稿发布成功: {slides_result['url']}",
+                    extra={"task_id": task_id, "asset_type": "slides"},
+                )
 
     # 互动卡片
     if "card" in asset_types:
@@ -185,13 +214,19 @@ async def publish_results(
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"互动卡片发送失败: {e}")
+            logger.error(
+                f"互动卡片发送失败: {e}",
+                extra={"task_id": task_id, "asset_type": "card", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(card): {db_err}")
+                logger.error(
+                    f"DB提交失败(card): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "card", "error": str(db_err)},
+                )
             else:
                 published.append({
                     "type": "card",
@@ -199,6 +234,10 @@ async def publish_results(
                     "url": card_result.get("url"),
                     "message_id": card_result["message_id"],
                 })
+                logger.info(
+                    "互动卡片发送成功",
+                    extra={"task_id": task_id, "asset_type": "card"},
+                )
 
     # 群消息
     if "message" in asset_types:
@@ -245,16 +284,26 @@ async def publish_results(
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"群消息发送失败: {e}")
+            logger.error(
+                f"群消息发送失败: {e}",
+                extra={"task_id": task_id, "asset_type": "message", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(message): {db_err}")
+                logger.error(
+                    f"DB提交失败(message): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "message", "error": str(db_err)},
+                )
             else:
                 published.append({"type": "message", "title": "群消息已发送",
                                    "message_id": msg_result["message_id"]})
+                logger.info(
+                    "群消息发送成功",
+                    extra={"task_id": task_id, "asset_type": "message"},
+                )
 
     # 飞书任务
     if "task" in asset_types and action_items:
@@ -273,15 +322,25 @@ async def publish_results(
                 )
                 db.add(asset)
         except Exception as e:
-            logger.error(f"飞书任务创建失败: {e}")
+            logger.error(
+                f"飞书任务创建失败: {e}",
+                extra={"task_id": task_id, "asset_type": "task", "error": str(e)},
+            )
         else:
             try:
                 await db.commit()
             except Exception as db_err:
                 await db.rollback()
-                logger.error(f"DB提交失败(task): {db_err}")
+                logger.error(
+                    f"DB提交失败(task): {db_err}",
+                    extra={"task_id": task_id, "asset_type": "task", "error": str(db_err)},
+                )
             else:
                 published.append({"type": "task", "count": len(task_results),
                                    "title": f"创建了 {len(task_results)} 个飞书任务"})
+                logger.info(
+                    f"飞书任务创建成功: {len(task_results)}",
+                    extra={"task_id": task_id, "asset_type": "task"},
+                )
 
     return published

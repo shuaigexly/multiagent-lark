@@ -96,6 +96,10 @@ async def create_task(
     )
     db.add(task)
     await db.commit()
+    logger.info(
+        "Task created",
+        extra={"task_id": str(task.id), "task_type": task.task_type},
+    )
 
     return TaskPlanResponse(
         task_id=task_id,
@@ -255,6 +259,10 @@ async def _execute_task(
             )
             if (running_count or 0) >= MAX_CONCURRENT:
                 error_message = f"当前运行中的任务已达上限（{MAX_CONCURRENT}），请稍后重试"
+                logger.error(
+                    "Task failed",
+                    extra={"task_id": task_id, "error": error_message},
+                )
                 if await _update_task_unless_cancelled(
                     db,
                     task_id,
@@ -332,6 +340,10 @@ async def _execute_task(
                 )
             except asyncio.TimeoutError:
                 error_message = f"任务执行超时（超过 {TASK_TIMEOUT} 秒）"
+                logger.error(
+                    "Task failed",
+                    extra={"task_id": task_id, "error": error_message},
+                )
                 if emitter is not None and not await _is_task_cancelled(db, task_id):
                     await emitter.emit_task_error(error_message)
                 await _update_task_unless_cancelled(
@@ -376,7 +388,11 @@ async def _execute_task(
             await emitter.emit_task_done(summary)
 
         except Exception as e:
-            logger.error(f"Task {task_id} failed: {e}", exc_info=True)
+            logger.error(
+                f"Task {task_id} failed: {e}",
+                exc_info=True,
+                extra={"task_id": task_id, "error": str(e)},
+            )
             try:
                 if await _update_task_unless_cancelled(
                     db,
