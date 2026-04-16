@@ -96,9 +96,14 @@ class BaseAgent(ABC):
         data_summary: Optional[DataSummary] = None,
         upstream_results: Optional[list[AgentResult]] = None,
         feishu_context: Optional[dict] = None,
+        user_instructions: Optional[str] = None,
     ) -> AgentResult:
         prompt = self._build_prompt(
-            task_description, data_summary, upstream_results, feishu_context
+            task_description,
+            data_summary,
+            upstream_results,
+            feishu_context,
+            user_instructions,
         )
         raw = await self._call_llm(prompt)
         if settings.reflection_enabled:
@@ -111,6 +116,7 @@ class BaseAgent(ABC):
         data_summary: Optional[DataSummary],
         upstream_results: Optional[list[AgentResult]],
         feishu_context: Optional[dict],
+        user_instructions: Optional[str] = None,
     ) -> str:
         data_section = ""
         if data_summary:
@@ -155,6 +161,12 @@ class BaseAgent(ABC):
             upstream_section=upstream_section,
             feishu_context=feishu_section,
         )
+        if user_instructions and user_instructions.strip():
+            base_prompt += (
+                "\n<user_instructions>\n"
+                f"{_escape_xml(user_instructions.strip())}\n"
+                "</user_instructions>\n"
+            )
         if skill_section:
             base_prompt = skill_section + "\n\n" + base_prompt
         return base_prompt

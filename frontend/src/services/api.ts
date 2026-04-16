@@ -30,10 +30,12 @@ export async function submitTask(
 
 export async function confirmTask(
   taskId: string,
-  selectedModules: string[]
+  selectedModules: string[],
+  userInstructions?: string | null
 ): Promise<{ task_id: string; status: string }> {
   const resp = await api.post(`/api/v1/tasks/${taskId}/confirm`, {
     selected_modules: selectedModules,
+    user_instructions: userInstructions || null,
   });
   return resp.data;
 }

@@ -32,6 +32,7 @@ class TaskPlanResponse(BaseModel):
 
 class TaskConfirm(BaseModel):
     selected_modules: List[str]
+    user_instructions: Optional[str] = None
 
     @field_validator("selected_modules")
     @classmethod

@@ -32,3 +32,8 @@
 | okr_review | okr_review.md | operations_manager,ceo_assistant | high | OKR健康评估：进度比公式/评级标准/季度复盘结构/对齐检查 |
 | competitive_analysis | competitive_analysis.md | product_manager,seo_advisor,finance_advisor | normal | 竞品分析：3C战略三角/Porter五力/功能差距矩阵/结论框架 |
 | risk_early_warning | risk_early_warning.md | finance_advisor,ceo_assistant,operations_manager | high | 风险预警矩阵：概率×影响/先行指标/缓解策略/表述规范 |
+| feishu_task_generation | feishu_task_generation.md | all | high | 飞书任务生成：SMART任务提取/优先级规则/负责人分配/API输出格式 |
+| feishu_calendar_meeting | feishu_calendar_meeting.md | product_manager,operations_manager,ceo_assistant | high | 飞书会议规范：SCQA议题/参会人选择/Pre-Read结构/日历事件格式 |
+| feishu_bitable_design | feishu_bitable_design.md | operations_manager,product_manager,data_analyst | normal | 飞书多维表格：字段类型选择/OKR追踪/项目看板/指标追踪模板 |
+| feishu_wiki_structure | feishu_wiki_structure.md | content_manager,product_manager,operations_manager | normal | 飞书知识库：层级设计/命名规范/索引页/文档生命周期/归档规则 |
+| feishu_notification_routing | feishu_notification_routing.md | all | high | 飞书通知路由：DM vs群消息/紧急分级/@规则/消息长度/通知模板 |

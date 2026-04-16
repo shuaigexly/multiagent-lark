@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Upload, FileText, X, Loader2, ArrowRight, Info } from 'lucide-react';
+import { Check, Upload, FileText, X, Loader2, ArrowRight } from 'lucide-react';
 import ModuleCard from '../components/ModuleCard';
 import ExecutionTimeline from '../components/ExecutionTimeline';
 import ContextSuggestions, { type Suggestion } from '../components/ContextSuggestions';
@@ -135,6 +135,7 @@ export default function Workbench() {
   const [feishuConfigured, setFeishuConfigured] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [userInstructions, setUserInstructions] = useState('');
 
   useEffect(() => {
     listAgents().then(setAgents).catch(() => setError('加载团队成员失败'));
@@ -201,7 +202,7 @@ export default function Workbench() {
       return;
     }
     setLoading(true); setStep('planning');
-    try { const r = await submitTask(inputText, file ?? undefined, feishuCtx ?? undefined); setPlan(r); setTaskId(r.task_id); setSelectedModules(r.selected_modules); setStep('confirm'); }
+    try { const r = await submitTask(inputText, file ?? undefined, feishuCtx ?? undefined); setPlan(r); setTaskId(r.task_id); setSelectedModules(r.selected_modules); setUserInstructions(''); setStep('confirm'); }
     catch { setStep('input'); setError('AI 组队失败'); }
     finally { setLoading(false); }
   };
@@ -219,6 +220,7 @@ export default function Workbench() {
       setEvents([]);
       setPlan(null);
       setTaskId(null);
+      setUserInstructions('');
     } catch {
       setError('取消任务失败');
     } finally {
@@ -229,7 +231,7 @@ export default function Workbench() {
   const handleConfirm = async () => {
     if (!taskId || selectedModules.length === 0) { setError('请至少选择一名团队成员'); return; }
     setError(null); setLoading(true); setEvents([]); setStep('running');
-    try { await confirmTask(taskId, selectedModules); startSSE(taskId, 'confirm'); }
+    try { await confirmTask(taskId, selectedModules, userInstructions); startSSE(taskId, 'confirm'); }
     catch { setLoading(false); setStep('confirm'); setError('执行失败'); }
   };
 
@@ -372,11 +374,28 @@ export default function Workbench() {
 
           {/* AI plan */}
           {step === 'confirm' && plan && (
-            <div className="flex items-start gap-2 rounded-md bg-accent px-3 py-2.5">
-              <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-              <div>
-                <div className="text-sm font-medium text-foreground">AI 已推荐团队 · <span className="text-primary">{plan.task_type_label}</span></div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{plan.reasoning}</p>
+            <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-sm font-medium">AI 规划方案 · {plan.task_type_label}</span>
+                <span className="ml-auto text-xs text-muted-foreground">可直接编辑修改</span>
+              </div>
+
+              <p className="text-xs text-muted-foreground border-l-2 border-primary/40 pl-3 italic">
+                {plan.reasoning}
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground/70">
+                  补充指令 / 修改分析方向（可选）
+                </label>
+                <textarea
+                  className="w-full min-h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+                  placeholder="例如：重点关注 Q3 数据，忽略节假日因素；或「只分析移动端用户」..."
+                  value={userInstructions}
+                  onChange={e => setUserInstructions(e.target.value)}
+                  rows={3}
+                />
               </div>
             </div>
           )}

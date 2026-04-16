@@ -146,10 +146,19 @@ async def confirm_task(
     db: AsyncSession = Depends(get_db),
 ):
     """用户确认模块选择后正式执行（BackgroundTasks 异步执行）"""
+    user_instructions = (
+        body.user_instructions.strip()
+        if body.user_instructions and body.user_instructions.strip()
+        else None
+    )
     result = await db.execute(
         update(Task)
         .where(Task.id == task_id, Task.status.in_(["planning", "failed"]))
-        .values(status="pending", selected_modules=body.selected_modules)
+        .values(
+            status="pending",
+            selected_modules=body.selected_modules,
+            user_instructions=user_instructions,
+        )
     )
     await db.commit()
     if result.rowcount == 0:
@@ -164,6 +173,7 @@ async def confirm_task(
         task_id,
         body.selected_modules,
         request.app.state.redis_client,
+        user_instructions,
     )
     return {"task_id": task_id, "status": "pending", "message": "任务已加入执行队列"}
 
@@ -268,6 +278,7 @@ async def _execute_task(
     task_id: str,
     selected_modules: list[str],
     redis_client=None,
+    user_instructions: Optional[str] = None,
 ):
     """后台执行任务（单机 MVP，无自动重试/恢复）"""
     from app.models.database import AsyncSessionLocal
@@ -362,6 +373,7 @@ async def _execute_task(
                         selected_modules=selected_modules,
                         data_summary=data_summary,
                         feishu_context=task.feishu_context,
+                        user_instructions=user_instructions or task.user_instructions,
                         emitter=emitter,
                     ),
                     timeout=TASK_TIMEOUT,

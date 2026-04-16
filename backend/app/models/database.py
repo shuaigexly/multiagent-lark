@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import (
     Column, String, Integer, Text, DateTime, JSON,
-    create_engine, event, UniqueConstraint, Index
+    create_engine, event, UniqueConstraint, Index, inspect, text
 )
 from sqlalchemy import event as sa_event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -30,6 +30,7 @@ class Task(Base):
     task_type = Column(String, nullable=True)            # TaskPlanner 识别结果
     task_type_label = Column(String, nullable=True)      # 中文标签
     selected_modules = Column(JSON, nullable=True)       # list[str]
+    user_instructions = Column(Text, nullable=True)
     feishu_context = Column(JSON, nullable=True)         # 关联飞书资产
     result_summary = Column(Text, nullable=True)         # 最终汇总结论
     error_message = Column(Text, nullable=True)
@@ -133,9 +134,22 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+async def _ensure_task_user_instructions_column(conn):
+    def has_column(sync_conn) -> bool:
+        inspector = inspect(sync_conn)
+        return any(
+            column["name"] == "user_instructions"
+            for column in inspector.get_columns("tasks")
+        )
+
+    if not await conn.run_sync(has_column):
+        await conn.execute(text("ALTER TABLE tasks ADD COLUMN user_instructions TEXT"))
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _ensure_task_user_instructions_column(conn)
 
 
 async def get_db():

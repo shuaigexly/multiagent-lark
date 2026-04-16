@@ -53,6 +53,7 @@ async def run_agent_safe(
     data_summary: Optional[DataSummary],
     upstream_results: Optional[list[AgentResult]],
     feishu_context: Optional[dict],
+    user_instructions: Optional[str],
     emitter: EventEmitter,
 ) -> AgentResult | None:
     agent = AGENT_REGISTRY.get(agent_id)
@@ -69,6 +70,7 @@ async def run_agent_safe(
                 data_summary=data_summary,
                 upstream_results=upstream_results,
                 feishu_context=feishu_context,
+                user_instructions=user_instructions,
             )
             summary = result.sections[0].content[:100] if result.sections else "完成"
             await emitter.emit_module_completed(agent.agent_id, agent.agent_name, summary)
@@ -104,6 +106,7 @@ async def orchestrate(
     data_summary: Optional[DataSummary],
     feishu_context: Optional[dict],
     emitter: EventEmitter,
+    user_instructions: Optional[str] = None,
 ) -> list[AgentResult]:
     """
     Dependency-aware execution:
@@ -170,6 +173,7 @@ async def orchestrate(
                 data_summary=data_summary,
                 upstream_results=all_results if all_results else None,
                 feishu_context=feishu_context,
+                user_instructions=user_instructions,
                 emitter=emitter,
             )
             for aid in ready
