@@ -2,7 +2,9 @@
 import asyncio
 import logging
 import os
+import time
 import uuid
+from collections import defaultdict
 from typing import Optional
 
 import aiofiles
@@ -27,6 +29,22 @@ from app.models.schemas import (
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 logger = logging.getLogger(__name__)
 
+# Simple in-memory rate limiter: max RATE_LIMIT_MAX tasks per RATE_LIMIT_WINDOW seconds per client IP
+_RATE_LIMIT_MAX = int(os.getenv("TASK_RATE_LIMIT_MAX", "10"))
+_RATE_LIMIT_WINDOW = int(os.getenv("TASK_RATE_LIMIT_WINDOW", "60"))
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(client_ip: str) -> None:
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW
+    requests = _rate_limit_store[client_ip]
+    # Evict expired entries
+    _rate_limit_store[client_ip] = [t for t in requests if t > window_start]
+    if len(_rate_limit_store[client_ip]) >= _RATE_LIMIT_MAX:
+        raise HTTPException(429, f"请求过于频繁，每 {_RATE_LIMIT_WINDOW} 秒最多创建 {_RATE_LIMIT_MAX} 个任务")
+    _rate_limit_store[client_ip].append(now)
+
 
 def _escape_like(value: str) -> str:
     """Escape SQLite LIKE metacharacters."""
@@ -35,6 +53,7 @@ def _escape_like(value: str) -> str:
 
 @router.post("", response_model=TaskPlanResponse, dependencies=[Depends(require_api_key)])
 async def create_task(
+    request: Request,
     input_text: Optional[str] = Form(None),
     feishu_context: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
@@ -44,6 +63,9 @@ async def create_task(
     提交任务。input_text 或 file 至少提供一个。
     返回 TaskPlanner 识别结果，用户确认后才正式执行。
     """
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     if not input_text and not file:
         raise HTTPException(422, "input_text 或 file 至少提供一个")
     MAX_INPUT_LEN = 5000

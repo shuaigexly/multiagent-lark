@@ -221,13 +221,13 @@ async def _handle_bot_task(
 
         await bot_handler.reply_text_in_thread(source_message_id, reply_text)
         logger.info(
-            "Bot task 完成 event_id=%s task_id=%s modules=%s results=%s chat_id=%s open_id=%s",
+            "Bot task 完成 event_id=%s task_id=%s modules=%s results=%s has_chat=%s has_user=%s",
             event_id,
             task_id,
             selected_modules,
             result_count or 0,
-            chat_id,
-            open_id,
+            bool(chat_id),
+            bool(open_id),
         )
     except Exception as exc:
         logger.error("Bot pipeline 执行失败 event_id=%s: %s", event_id, exc, exc_info=True)
