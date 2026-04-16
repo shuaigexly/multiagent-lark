@@ -23,6 +23,7 @@ export interface AgentResult {
   agent_name: string;
   sections: ResultSection[];
   action_items: string[];
+  chart_data?: Array<{ name: string; value: number; unit?: string }>;
 }
 
 export interface TaskResultsResponse {

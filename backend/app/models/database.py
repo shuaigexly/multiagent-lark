@@ -68,6 +68,7 @@ class TaskResult(Base):
     agent_name = Column(String, nullable=False)
     sections = Column(JSON, nullable=True)       # list[{title, content}]
     action_items = Column(JSON, nullable=True)   # list[str]
+    chart_data = Column(JSON, nullable=True)     # list[dict]
     raw_output = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

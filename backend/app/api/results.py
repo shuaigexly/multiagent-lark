@@ -37,6 +37,7 @@ async def get_results(task_id: str, db: AsyncSession = Depends(get_db)):
             agent_name=r.agent_name,
             sections=[ResultSection(**s) for s in (r.sections or [])],
             action_items=r.action_items or [],
+            chart_data=r.chart_data or [],
         )
         for r in task_results
     ]

@@ -393,6 +393,7 @@ async def _execute_task(
                     agent_name=ar.agent_name,
                     sections=[s.model_dump() for s in ar.sections],
                     action_items=ar.action_items,
+                    chart_data=ar.chart_data,
                     raw_output=ar.raw_output,
                 )
                 db.add(tr)
