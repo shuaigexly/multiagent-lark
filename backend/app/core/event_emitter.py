@@ -7,7 +7,7 @@ EventEmitter: 统一事件落库 + Redis 广播
 import json
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import select, update
@@ -41,7 +41,7 @@ class EventEmitter:
             agent_id=agent_id,
             agent_name=agent_name,
             payload=payload or {},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         self.db.add(event)
         # Commit before Redis publish so consumers never see uncommitted events
@@ -77,7 +77,7 @@ class EventEmitter:
             update_result = await self.db.execute(
                 update(Task)
                 .where(Task.id == self.task_id, Task.last_sequence == current)
-                .values(last_sequence=new_seq, updated_at=datetime.utcnow())
+                .values(last_sequence=new_seq, updated_at=datetime.now(timezone.utc))
             )
             if update_result.rowcount == 1:
                 return new_seq

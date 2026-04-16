@@ -56,18 +56,23 @@ class MetaGPTEventReporter:
         self.agent_id = agent_id
         self.agent_name = agent_name
         self.emitter = emitter
-        self.loop = loop or asyncio.get_event_loop()
+        if loop is not None:
+            self.loop = loop
+        else:
+            try:
+                self.loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self.loop = None
 
     def report(self, value: Any, name: str, extra: Optional[dict] = None):
         """同步调用：线程安全地调度到事件循环"""
         event_type, payload = normalize_metagpt_report(name, value, extra)
         try:
-            self.loop.call_soon_threadsafe(
-                lambda: asyncio.ensure_future(
+            if self.loop is not None:
+                asyncio.run_coroutine_threadsafe(
                     self.emitter.emit(event_type, self.agent_id, self.agent_name, payload),
-                    loop=self.loop,
+                    self.loop,
                 )
-            )
         except Exception as e:
             logger.warning(f"MetaGPTEventReporter.report failed (non-fatal): {e}")
 

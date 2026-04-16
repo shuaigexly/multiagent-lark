@@ -100,7 +100,7 @@ async def _create_task_impl(title: str, notes: Optional[str] = None, due_ms: Opt
 
 
 async def batch_create_tasks(items: list[str]) -> list[dict]:
-    return await with_retry(_batch_create_tasks_impl, items)
+    return await _batch_create_tasks_impl(items)
 
 
 async def _batch_create_tasks_impl(items: list[str]) -> list[dict]:

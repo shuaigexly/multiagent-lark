@@ -26,10 +26,20 @@ from typing import Optional
 import httpx
 
 from app.core.settings import settings
+from app.feishu.client import get_feishu_base_url, get_feishu_region
 
 logger = logging.getLogger(__name__)
 
 _TOKEN_CACHE: dict = {}
+
+
+def _get_feishu_open_base_url() -> str:
+    base_url = get_feishu_base_url().rstrip("/")
+    if base_url.startswith("https://open."):
+        return base_url
+
+    region = get_feishu_region().strip().lower()
+    return "https://open.larksuite.com" if region == "intl" else "https://open.feishu.cn"
 
 
 async def _get_tenant_access_token() -> str:
@@ -42,7 +52,7 @@ async def _get_tenant_access_token() -> str:
 
     async with httpx.AsyncClient(timeout=10) as http:
         resp = await http.post(
-            "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+            f"{_get_feishu_open_base_url()}/open-apis/auth/v3/tenant_access_token/internal",
             json={
                 "app_id": settings.feishu_app_id,
                 "app_secret": settings.feishu_app_secret,
@@ -85,7 +95,7 @@ async def call_aily(
             "文档：https://open.feishu.cn/document/aily"
         )
 
-    base = "https://open.feishu.cn/open-apis/aily/v1"
+    base = f"{_get_feishu_open_base_url()}/open-apis/aily/v1"
     token = await _get_tenant_access_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 

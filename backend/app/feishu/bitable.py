@@ -48,7 +48,7 @@ async def create_analysis_bitable(
     client=None,
 ) -> dict:
     client = client or get_feishu_client()
-    bitable_result = await _create_bitable_impl(name, client=client)
+    bitable_result = await with_retry(_create_bitable_impl, name, client=client)
 
     module_options = [result.agent_name for result in agent_results if result.agent_name] or ["暂无模块"]
 
@@ -78,7 +78,8 @@ async def create_analysis_bitable(
 
     action_records = _build_action_records(agent_results)
     if action_records:
-        await _batch_add_records_impl(
+        await with_retry(
+            _batch_add_records_impl,
             app_token=bitable_result["app_token"],
             table_id=action_table_id,
             records=action_records,
@@ -87,7 +88,8 @@ async def create_analysis_bitable(
 
     summary_records = _build_summary_records(agent_results)
     if summary_records:
-        await _batch_add_records_impl(
+        await with_retry(
+            _batch_add_records_impl,
             app_token=bitable_result["app_token"],
             table_id=summary_table_id,
             records=summary_records,

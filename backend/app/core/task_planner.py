@@ -4,6 +4,7 @@ TaskPlanner：用 LLM 识别任务类型，推荐执行模块列表和顺序。
 """
 import json
 import logging
+import re
 from typing import Optional
 from pydantic import BaseModel
 
@@ -98,29 +99,42 @@ class TaskPlan(BaseModel):
 async def plan_task(user_input: str, feishu_context: Optional[dict] = None) -> TaskPlan:
     """用 LLM 识别任务类型，返回 TaskPlan。LLM 不可用时降级到关键词匹配。"""
     try:
-        return await _llm_plan(user_input)
+        return await _llm_plan(user_input, feishu_context)
     except Exception as e:
         logger.warning(f"LLM planning failed, fallback to keyword matching: {e}")
         return _keyword_plan(user_input)
 
 
-async def _llm_plan(user_input: str) -> TaskPlan:
+async def _llm_plan(user_input: str, feishu_context: Optional[dict] = None) -> TaskPlan:
     from app.core.llm_client import call_llm
 
     task_types_desc = "\n".join(
         f"- {k}: {v['label']} — {v['description']}"
         for k, v in TASK_TYPES.items()
     )
+    context_hint = ""
+    if feishu_context:
+        hints = []
+        if feishu_context.get("drive"):
+            hints.append(f"{len(feishu_context['drive'])} 份云文档")
+        if feishu_context.get("tasks"):
+            pending = [t for t in feishu_context["tasks"] if not t.get("completed")]
+            hints.append(f"{len(pending)} 项待办任务")
+        if feishu_context.get("calendar"):
+            hints.append(f"{len(feishu_context['calendar'])} 条日历事项")
+        if hints:
+            context_hint = f"\n\n【用户飞书数据】用户提供了：{'、'.join(hints)}，请据此优化模块选择。"
     prompt = PLANNER_PROMPT.format(
         task_types_desc=task_types_desc,
         user_input=user_input,
-    )
+    ) + context_hint
     raw = await call_llm(
         system_prompt="你是一个任务分析专家，只返回 JSON，不要其他文字。",
         user_prompt=prompt,
         temperature=0,
         max_tokens=300,
     )
+    raw = re.sub(r'<think(?:ing)?>.*?</think(?:ing)?>', '', raw, flags=re.DOTALL).strip()
     # 清理 markdown 代码块
     if raw.startswith("```"):
         raw = raw.split("```")[1]

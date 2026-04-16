@@ -73,15 +73,17 @@ async def _send_card_message_impl(title: str, content: str, chat_id: Optional[st
         raise ValueError("未配置飞书群 ID")
 
     card = {
-        "config": {"wide_screen_mode": True},
-        "elements": [
-            {
-                "tag": "div",
-                "text": {"content": content[:3000], "tag": "lark_md"},
-            }
-        ],
+        "schema": "2.0",
+        "body": {
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {"tag": "lark_md", "content": content[:3000]},
+                }
+            ]
+        },
         "header": {
-            "title": {"content": title, "tag": "plain_text"},
+            "title": {"tag": "plain_text", "content": title},
             "template": "blue",
         },
     }
@@ -108,15 +110,17 @@ async def send_dm_message(open_id: str, text: str) -> dict:
 async def send_dm_card(open_id: str, title: str, content: str) -> dict:
     """发送富文本卡片私信给用户（open_id）"""
     card = {
-        "config": {"wide_screen_mode": True},
-        "elements": [
-            {
-                "tag": "div",
-                "text": {"content": content[:3000], "tag": "lark_md"},
-            }
-        ],
+        "schema": "2.0",
+        "body": {
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {"tag": "lark_md", "content": content[:3000]},
+                }
+            ]
+        },
         "header": {
-            "title": {"content": title, "tag": "plain_text"},
+            "title": {"tag": "plain_text", "content": title},
             "template": "blue",
         },
     }

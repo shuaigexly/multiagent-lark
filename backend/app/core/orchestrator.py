@@ -202,6 +202,21 @@ async def orchestrate(
                     action_items=[],
                     raw_output=f"FAILED: {res}",
                 ))
+                continue
+            if res is None:
+                agent = AGENT_REGISTRY.get(aid)
+                agent_name = agent.agent_name if agent else aid
+                logger.warning(f"Agent {aid} returned None (not found in registry), skipping")
+                wave_results.append(AgentResult(
+                    agent_id=aid,
+                    agent_name=aid,
+                    sections=[ResultSection(
+                        title="执行状态",
+                        content=f"[{aid}] 模块未注册，已跳过。"
+                    )],
+                    action_items=[],
+                    raw_output="SKIPPED: agent not found in registry",
+                ))
         all_results.extend(wave_results)
         completed.update(ready)
         remaining = [aid for aid in remaining if aid not in completed]

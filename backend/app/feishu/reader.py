@@ -291,7 +291,7 @@ async def list_tasks(page_size: int = 50) -> list[dict]:
             {
                 "guid": item.guid,
                 "summary": item.summary,
-                "due": str(item.due.timestamp) if item.due and item.due.timestamp is not None else None,
+                "due": _ts_to_readable(item.due.timestamp) if item.due and item.due.timestamp is not None else None,
                 "status": item.status,
                 "completed": bool(item.completed_at),
                 "creator_id": item.creator.id if item.creator else None,

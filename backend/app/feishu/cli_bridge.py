@@ -6,6 +6,8 @@ import os
 import shutil
 from typing import Optional
 
+from app.core.settings import get_feishu_app_id, get_feishu_app_secret
+
 logger = logging.getLogger(__name__)
 CLI_AVAILABLE: Optional[bool] = None
 
@@ -60,8 +62,8 @@ async def cli_create_slides(
 async def _run_cli(args: list[str]) -> dict:
     env = {
         **os.environ,
-        "FEISHU_APP_ID": os.getenv("FEISHU_APP_ID", ""),
-        "FEISHU_APP_SECRET": os.getenv("FEISHU_APP_SECRET", ""),
+        "FEISHU_APP_ID": get_feishu_app_id() or "",
+        "FEISHU_APP_SECRET": get_feishu_app_secret() or "",
     }
     proc = await asyncio.create_subprocess_exec(
         *args,

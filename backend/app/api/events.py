@@ -46,19 +46,19 @@ async def _event_generator(task_id: str, request: Request):
     last_seq = 0
     start_time = time.monotonic()
 
-    while True:
-        if await request.is_disconnected():
-            return
+    async with AsyncSessionLocal() as db:
+        while True:
+            if await request.is_disconnected():
+                return
 
-        if time.monotonic() - start_time > MAX_SSE_SECONDS:
-            yield {
-                "data": json.dumps(
-                    {"event_type": "stream.end", "status": "timeout"}
-                )
-            }
-            break
+            if time.monotonic() - start_time > MAX_SSE_SECONDS:
+                yield {
+                    "data": json.dumps(
+                        {"event_type": "stream.end", "status": "timeout"}
+                    )
+                }
+                break
 
-        async with AsyncSessionLocal() as db:
             events_result = await db.execute(
                 select(TaskEvent)
                 .where(TaskEvent.task_id == task_id, TaskEvent.sequence > last_seq)
@@ -87,11 +87,11 @@ async def _event_generator(task_id: str, request: Request):
             )
             status = status_result.scalar_one_or_none()
 
-        if status in ("done", "failed", "cancelled"):
-            yield {"data": json.dumps({"event_type": "stream.end", "status": status})}
-            return
+            if status in ("done", "failed", "cancelled"):
+                yield {"data": json.dumps({"event_type": "stream.end", "status": status})}
+                return
 
-        await asyncio.sleep(1)
+            await asyncio.sleep(1)
 
 
 def _to_user_message(event_type: str, agent_name: str | None, payload: dict) -> str:

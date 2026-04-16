@@ -6,6 +6,8 @@ import os
 import shutil
 from typing import Any, Optional
 
+from app.core.settings import get_feishu_app_id, get_feishu_app_secret
+
 logger = logging.getLogger(__name__)
 
 _lock = asyncio.Lock()
@@ -21,8 +23,8 @@ async def _get_proc() -> asyncio.subprocess.Process:
     global _proc
     if _proc is not None and _proc.returncode is None:
         return _proc
-    app_id = os.getenv("FEISHU_APP_ID", "")
-    app_secret = os.getenv("FEISHU_APP_SECRET", "")
+    app_id = get_feishu_app_id() or ""
+    app_secret = get_feishu_app_secret() or ""
     if not app_id or not app_secret:
         raise RuntimeError("FEISHU_APP_ID and FEISHU_APP_SECRET must be set to use lark-mcp")
     _proc = await asyncio.create_subprocess_exec(
