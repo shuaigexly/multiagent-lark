@@ -189,7 +189,7 @@ async def list_tasks(
 ):
     status = (status or "").strip() or None
     search = (search or "").strip() or None
-    effective_limit = 50 if not request.query_params else limit
+    effective_limit = limit
 
     query = select(Task)
     if status:

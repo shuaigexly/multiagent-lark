@@ -80,14 +80,12 @@ async def feishu_bot_event(request: Request, background_tasks: BackgroundTasks):
         raw_body = await request.body()
         raw_payload = json.loads(raw_body.decode("utf-8"))
         is_encrypted = bool(raw_payload.get("encrypt"))
-        body = _decode_request_body(raw_body, cfg["encrypt_key"])
-        logger.info("Bot event received event_id=%s", (body.get("header") or {}).get("event_id", "unknown"))
     except Exception as exc:
         logger.warning("Bot event: 请求体解析失败: %s", exc)
         return JSONResponse({"ok": False}, status_code=400)
 
-    if body.get("type") == "url_verification":
-        return JSONResponse({"challenge": body.get("challenge", "")})
+    if raw_payload.get("type") == "url_verification":
+        return JSONResponse({"challenge": raw_payload.get("challenge", "")})
 
     if cfg["encrypt_key"] and not is_encrypted:
         logger.warning("Bot event: 已配置 Encrypt Key，但事件未加密，已拒绝")
@@ -95,6 +93,14 @@ async def feishu_bot_event(request: Request, background_tasks: BackgroundTasks):
     if cfg["encrypt_key"] and not _verify_signature(request, raw_body, cfg["encrypt_key"]):
         logger.warning("Bot event: 签名校验失败，已忽略")
         return JSONResponse({"ok": False}, status_code=401)
+
+    try:
+        body = _decode_request_body(raw_body, cfg["encrypt_key"])
+        logger.info("Bot event received event_id=%s", (body.get("header") or {}).get("event_id", "unknown"))
+    except Exception as exc:
+        logger.warning("Bot event: 请求体解析失败: %s", exc)
+        return JSONResponse({"ok": False}, status_code=400)
+
     if cfg["verification_token"] and not _verify_token(body, cfg["verification_token"]):
         logger.warning("Bot event: verification_token 不匹配，已忽略")
         return JSONResponse({"ok": False}, status_code=401)
