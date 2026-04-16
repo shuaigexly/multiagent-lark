@@ -266,19 +266,24 @@ AGENT_DEPENDENCIES["{new_agent_id}"] = {"ceo_assistant"}  # 如果需要先于 C
 | `FEISHU_APP_ID` | 否 | 飞书应用 ID | `cli_xxx` |
 | `FEISHU_APP_SECRET` | 否 | 飞书应用密钥 | `xxx` |
 | `DATABASE_URL` | 否 | 数据库 URL | `sqlite+aiosqlite:///workbench.db` |
+| `REFLECTION_ENABLED` | 否 | 是否启用 Agent 反思机制 | `true`（默认），设为 `false` 减少 LLM 调用次数 |
+| `TASK_TIMEOUT_SECONDS` | 否 | 任务执行总超时（秒） | `300`（默认） |
+| `MAX_CONCURRENT_TASKS` | 否 | 最大并发执行任务数 | `3`（默认） |
+| `MAX_SSE_SECONDS` | 否 | SSE 连接最大保持时长（秒） | `600`（默认） |
 
 ---
 
 ## 任务状态机
 
 ```
-pending → planning → confirmed → running → done
-                                         → failed
+planning → pending → running → done
+                             → failed
+                   → cancelled
 ```
 
-- `pending`：任务已提交，等待规划
-- `planning`：TaskPlanner 正在识别任务类型
-- `confirmed`：用户确认模块组合，等待执行
+- `planning`：TaskPlanner 识别任务类型，等待用户确认模块组合
+- `pending`：用户确认后，任务加入执行队列
 - `running`：Agent 波次执行中
 - `done`：所有 Agent 完成，结果已存储
-- `failed`：执行过程中发生不可恢复的错误
+- `failed`：执行过程中发生不可恢复的错误（含超时、并发超限）
+- `cancelled`：用户主动取消（支持在 planning/pending/running 阶段取消）

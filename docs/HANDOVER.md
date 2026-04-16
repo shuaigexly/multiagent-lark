@@ -1,7 +1,7 @@
 # 技术交接文档
 
 > 面向：新接手开发者 / 协作者  
-> 最后更新：2025年
+> 最后更新：2026年
 
 ---
 
@@ -61,6 +61,7 @@ POST /api/v1/tasks/{id}/confirm    # 用户确认模块组合
   ▼
 GET /api/v1/tasks/{id}/stream      # SSE 长连接，实时推送执行日志
   │
+  ├── [可选] _enrich_from_feishu_context()  # 无上传文件时，自动读取飞书文档内容作为分析数据
   ├── 波次1：data_analyst（无依赖）并行启动
   ├── 波次2：finance_advisor（依赖data_analyst完成）
   ├── 波次N：其他无依赖模块并行运行
@@ -68,7 +69,16 @@ GET /api/v1/tasks/{id}/stream      # SSE 长连接，实时推送执行日志
   │
   ▼
 GET /api/v1/tasks/{id}/results     # 获取完整分析报告
-POST /api/v1/feishu/publish        # 发布到飞书（文档/多维表/消息）
+POST /api/v1/feishu/publish        # 发布到飞书（文档/多维表格/演示文稿/消息）
+```
+
+**飞书 OAuth 授权流程**（用于任务 API 用户级访问）：
+```
+GET /api/v1/feishu/oauth/url       # 生成飞书授权链接
+  → 用户在飞书完成授权
+GET /api/v1/feishu/oauth/callback  # 接收 code，交换 user_access_token
+  → 存入数据库 + 更新内存缓存
+GET /api/v1/feishu/oauth/status    # 查询当前授权状态
 ```
 
 ---
@@ -170,14 +180,27 @@ AGENT_DEPENDENCIES = {
 
 飞书功能需要企业自建应用，配置 `FEISHU_APP_ID` + `FEISHU_APP_SECRET`：
 
-| 功能 | 后端路由 | 飞书权限 |
-|------|----------|----------|
-| 读取云盘文件 | GET /api/v1/feishu/drive | drive:drive:readonly |
-| 读取日历事件 | GET /api/v1/feishu/calendar | calendar:calendar:readonly |
-| 读取待办任务 | GET /api/v1/feishu/tasks | task:task:readonly |
-| 读取群组列表 | GET /api/v1/feishu/chats | im:chat:readonly |
-| 创建飞书任务 | POST /api/v1/feishu/tasks | task:task:write |
-| 发布结果 | POST /api/v1/feishu/publish | docx:document + im:message |
+| 功能 | 后端路由 | 飞书权限 | 备注 |
+|------|----------|----------|------|
+| 读取云盘文件 | GET /api/v1/feishu/drive | drive:drive:readonly | 优先用 user_access_token |
+| 读取日历事件 | GET /api/v1/feishu/calendar | calendar:calendar:readonly | 优先用 user_access_token |
+| 读取待办任务 | GET /api/v1/feishu/tasks | task:task:readable | **必须** user_access_token |
+| 读取群组列表 | GET /api/v1/feishu/chats | im:chat:readonly | — |
+| 创建飞书任务 | POST /api/v1/feishu/tasks | task:task:write | 优先用 user_access_token（任务归属用户） |
+| 发布文档 | POST /api/v1/feishu/publish | docx:document | 富文本结构化块 |
+| 发布多维表格 | POST /api/v1/feishu/publish | bitable:app | 双表+单选字段 |
+| 发布演示文稿 | POST /api/v1/feishu/publish | — | 尝试 Presentation API，失败降级为 doc |
+| 发布群消息 | POST /api/v1/feishu/publish | im:message:send_as_bot | 需传入 chat_id |
+| OAuth 授权 | GET /api/v1/feishu/oauth/url | contact:user.id:readonly | 跳转飞书授权页面 |
+
+### 飞书任务 API 说明
+
+飞书任务 v2 API 必须使用 `user_access_token`（tenant_access_token 被拒绝）。完整流程：
+1. 用户在「设置」页面点击「授权飞书任务」
+2. 后端生成 OAuth 链接，用户跳转到飞书完成授权
+3. 飞书回调到 `/api/v1/feishu/oauth/callback`，后端用 code 换取 user_access_token
+4. Token 存入数据库，服务重启自动恢复（`_load_runtime_config`）
+5. Token 过期时（code=99991668）自动清除，需重新授权
 
 未配置飞书时，以上接口会返回空数据，不影响主流程。
 
@@ -185,11 +208,22 @@ AGENT_DEPENDENCIES = {
 
 ## 七、数据库
 
-使用 SQLite（`backend/workbench.db`），两张表：
+使用 SQLite（`backend/workbench.db`），三张表：
 - `tasks` — 任务记录（id, description, status, selected_modules, created_at）
 - `agent_results` — Agent 输出（task_id, agent_id, sections JSON, action_items JSON）
+- `user_config` — 运行时配置（key/value，包含 LLM 配置、飞书凭证、用户 OAuth token）
 
 通过 SQLAlchemy async ORM 操作，无需手动建表（startup 自动 create_all）。
+
+**user_config 关键字段**：
+
+| key | 说明 |
+|-----|------|
+| `llm_api_key` / `llm_model` | LLM 配置 |
+| `feishu_app_id` / `feishu_app_secret` | 飞书应用凭证 |
+| `feishu_user_access_token` | 用户 OAuth token（飞书任务 API 必须） |
+| `feishu_user_refresh_token` | 用户 refresh token |
+| `feishu_user_open_id` | 用户 open_id（创建任务时用于指定负责人） |
 
 ---
 
@@ -199,10 +233,16 @@ AGENT_DEPENDENCIES = {
 A: `llm_client.py` 已内置 3 次重试，每次超时后等待 0/2/4s。如需调整超时时间，在 `AsyncOpenAI()` 构造时加 `timeout=60`。
 
 **Q: 某个 Agent 一直失败？**  
-A: 查看后端日志，搜索 `Agent {agent_id} failed`，查看具体错误。Agent 最多重试 3 次，失败后跳过继续执行其他 Agent，不会中断整个任务。
+A: 查看后端日志，搜索 `Agent {agent_id} failed`，查看具体错误。Agent 最多重试 3 次，失败后返回降级结果（而非静默跳过），不会中断整个任务。
 
 **Q: 飞书上下文不显示？**  
 A: 检查 `.env` 中 `FEISHU_APP_ID / FEISHU_APP_SECRET` 是否正确，以及飞书应用是否已发布上线（自建应用需要发布才能生效）。
+
+**Q: 飞书任务读取/创建失败？**  
+A: 飞书任务 v2 API 强制要求 user_access_token。在「设置」页面点击「授权飞书任务」完成 OAuth 授权。Token 过期时（日志中出现 code=99991668）需重新授权。
+
+**Q: 发布群消息报错"需要提供 chat_id"？**  
+A: 选择「群消息」发布类型时，必须在发布面板中填写目标群 ID。可在「飞书工作区 → 群聊」页面复制群 ID。
 
 **Q: 如何切换 LLM 到 DeepSeek？**  
 ```env

@@ -55,7 +55,8 @@ backend/app/
 │   ├── tasks.py      # POST /tasks（提交任务）、POST /tasks/{id}/confirm（确认执行）
 │   ├── events.py     # GET /tasks/{id}/stream（SSE 实时日志）
 │   ├── results.py    # GET /tasks/{id}/results（获取完整报告）
-│   └── feishu.py     # 飞书数据读写：文档/日历/任务/群聊/发布
+│   ├── feishu.py     # 飞书数据读写：文档/日历/任务/群聊/发布
+│   └── feishu_oauth.py  # 飞书 OAuth2 授权流程（/oauth/url、/oauth/callback、/oauth/status）
 ├── agents/           # Agent 模块
 │   ├── base_agent.py # 基类：prompt 构建、LLM 调用、反思机制、输出解析
 │   ├── registry.py   # 注册表 + 依赖图 AGENT_DEPENDENCIES
@@ -66,7 +67,14 @@ backend/app/
 │   ├── llm_client.py     # LLM 调用工厂（含重试）
 │   ├── event_emitter.py  # SSE 事件推送
 │   └── data_parser.py    # 文件解析（CSV/TXT/MD）
-└── feishu/           # 飞书 SDK 封装（文档/多维表/消息/任务/知识库）
+└── feishu/           # 飞书 SDK 封装
+    ├── doc.py        # 富文本文档发布（heading/callout/bullet/divider 结构化块）
+    ├── bitable.py    # 多维表格发布（双表：行动清单 + 分析摘要，含单选字段）
+    ├── slides.py     # 演示文稿发布（Presentation API + doc 降级兜底）
+    ├── reader.py     # 飞书数据读取（云盘/日历/任务/群聊），优先 user_access_token
+    ├── task.py       # 创建飞书任务（支持 user_access_token 指定负责人）
+    ├── publisher.py  # 统一发布入口（doc/bitable/slides/message）
+    └── user_token.py # 用户 OAuth token 内存缓存（user_access_token / open_id）
 ```
 
 ### 前端核心页面
@@ -74,15 +82,20 @@ backend/app/
 ```
 frontend/src/
 ├── pages/
-│   ├── Index.tsx       # 工作台主页（任务输入 + 模块选择 + 执行监控）
-│   └── ResultView.tsx  # 结果详情（分节报告 + 行动项 + 飞书发布）
+│   ├── Index.tsx           # 工作台主页（任务输入 + 模块选择 + 执行监控）
+│   ├── ResultView.tsx      # 结果详情（分节报告 + 行动项 + 飞书发布，支持 slides）
+│   ├── FeishuWorkspace.tsx # 飞书工作区（云盘/日历/任务/群聊四 Tab 浏览）
+│   ├── Settings.tsx        # 设置页（LLM 配置 + 飞书配置 + OAuth 授权入口）
+│   └── History.tsx         # 任务历史列表
 ├── components/
 │   ├── ExecutionTimeline.tsx   # 执行日志（Agent 活动卡片 + 系统事件时间线）
 │   ├── ModuleCard.tsx          # Agent 选择卡片（含 persona 信息）
-│   └── ContextSuggestions.tsx  # 飞书上下文智能推荐卡片
+│   ├── ContextSuggestions.tsx  # 飞书上下文智能推荐卡片
+│   └── FeishuAssetCard.tsx     # 发布资产卡片（doc/bitable/slides/message）
 └── services/
     ├── api.ts      # 后端 API 调用
-    └── feishu.ts   # 飞书数据拉取
+    ├── feishu.ts   # 飞书数据拉取
+    └── config.ts   # 配置读写 + LLM 状态 localStorage 缓存
 ```
 
 ---
@@ -137,11 +150,15 @@ npm run dev
 | `docx:document` | 创建/读写飞书文档 |
 | `bitable:app` | 创建/读写多维表格 |
 | `im:message:send_as_bot` | 机器人发送群消息 |
-| `task:task:write` | 创建飞书任务 |
+| `task:task:write` | 创建飞书任务（需用户授权） |
+| `task:task:readable` | 读取飞书任务列表（需用户授权） |
 | `drive:drive:readonly` | 读取云盘文件列表 |
 | `calendar:calendar:readonly` | 读取日历事件 |
 | `im:chat:readonly` | 获取群组列表 |
+| `contact:user.id:readonly` | OAuth 授权后获取用户 open_id |
 | `wiki:node:create` | 知识库写入（可选） |
+
+> **注意**：飞书任务 API 需要用户级授权（user_access_token）。在「设置」页面点击「授权飞书任务」完成 OAuth 授权后，才能读取和创建任务。
 
 ---
 
@@ -162,7 +179,18 @@ npm run dev
 
 ## 变更日志
 
-### v2.0（当前）
+### v3.0（当前）
+- **飞书 OAuth 用户授权**：新增完整 OAuth2 流程（`/oauth/url` → 飞书授权 → `/oauth/callback`），user_access_token 持久化存储到数据库，服务重启自动恢复
+- **飞书任务用户归属**：创建任务时通过 user_access_token 将任务归属到授权用户，出现在「我负责的」列表
+- **飞书上下文自动读取文档内容**：无上传文件时，自动读取飞书上下文中的文档正文（最多 2 篇）作为 Agent 分析数据源
+- **云盘/日历使用用户 token**：drive、calendar API 优先使用 user_access_token，提升访问权限覆盖范围
+- **群消息发布前置校验**：发布前验证 chat_id 不为空，避免静默失败
+- **飞书工作区页面**：新增独立浏览页，支持文档/日历/任务/群聊四 Tab 查看
+- **富文本文档发布**：doc.py 升级为结构化块（heading2/3、callout、bullet、divider），不再发布纯文本
+- **增强多维表格**：bitable.py 生成双表（行动清单含单选优先级/状态/来源模块字段 + 分析摘要表）
+- **演示文稿发布**：新增 slides.py，尝试 Feishu Presentation API，失败自动降级为结构化文档
+
+### v2.0
 - **多 Agent 架构升级**：依赖感知波次执行，data_analyst → finance_advisor → ceo_assistant 按序推进
 - **重试机制**：Agent 级别（3次，0/2/4s退避）+ LLM 调用级别（3次，0/2/4s退避）
 - **AutoGen 反思机制**：每个 Agent 输出后自动质量评审，质量问题记录日志
