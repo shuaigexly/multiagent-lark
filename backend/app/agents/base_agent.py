@@ -107,7 +107,12 @@ class BaseAgent(ABC):
         )
         raw = await self._call_llm(prompt)
         if settings.reflection_enabled:
-            await self._reflect_on_output(raw, task_description)
+            verdict = await self._reflect_on_output(raw, task_description)
+            if verdict and not verdict.strip().upper().startswith("PASS"):
+                try:
+                    raw = await self._call_llm(prompt)
+                except Exception:
+                    pass
         return self._parse_output(raw)
 
     def _build_prompt(
@@ -120,7 +125,8 @@ class BaseAgent(ABC):
     ) -> str:
         data_section = ""
         if data_summary:
-            raw_preview = _escape_xml(data_summary.raw_preview[:2000])
+            content_for_prompt = data_summary.full_text or data_summary.raw_preview
+            raw_preview = _escape_xml(content_for_prompt[:6000])
             data_section = (
                 "\n<data_input>\n"
                 f"类型：{data_summary.content_type}\n"
@@ -143,9 +149,12 @@ class BaseAgent(ABC):
                         f"  - {a}" for a in r.action_items[:10]
                     )
                 parts.append(f"【{r.agent_name}的分析】\n{section_text}{action_text}")
+            upstream_content = "\n\n".join(parts)
+            if len(upstream_content) > 8000:
+                upstream_content = upstream_content[:8000] + "\n...[上游分析内容已截断，仅显示前8000字]"
             upstream_section = (
                 "\n<upstream_analysis>\n"
-                + "\n\n".join(parts)
+                + upstream_content
                 + "\n</upstream_analysis>\n"
             )
 

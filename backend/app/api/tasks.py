@@ -506,7 +506,7 @@ async def _enrich_from_feishu_context(
 
     combined = "\n\n---\n\n".join(parts)
     return DataSummary(
-        raw_preview=combined[:1000],
+        raw_preview=combined[:6000],
         columns=[],
         row_count=len(parts),
         basic_stats={},

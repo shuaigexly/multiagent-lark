@@ -13,6 +13,19 @@ from lark_oapi.api.wiki.v2 import ListSpaceNodeRequest, ListSpaceRequest
 logger = logging.getLogger(__name__)
 
 
+def _ts_to_readable(ts) -> str | None:
+    """Convert Feishu timestamp (seconds as string/int) to readable datetime string."""
+    if ts is None:
+        return None
+    try:
+        from datetime import datetime, timezone
+
+        ts_int = int(ts)
+        return datetime.fromtimestamp(ts_int, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError, OSError):
+        return str(ts)
+
+
 def _message_preview(content: str | None) -> str:
     if not content:
         return ""
@@ -60,8 +73,8 @@ async def list_drive_files(page_size: int = 20) -> list[dict]:
                 "name": item.name,
                 "type": item.type,
                 "url": item.url,
-                "created_time": item.created_time,
-                "modified_time": item.modified_time,
+                "created_time": _ts_to_readable(item.created_time),
+                "modified_time": _ts_to_readable(item.modified_time),
             }
             for item in files
         ]
@@ -234,8 +247,8 @@ async def list_calendar_events(start_time: str, end_time: str, page_size: int = 
             {
                 "event_id": item.event_id,
                 "summary": item.summary,
-                "start_time": item.start_time.timestamp if item.start_time else None,
-                "end_time": item.end_time.timestamp if item.end_time else None,
+                "start_time": _ts_to_readable(item.start_time.timestamp) if item.start_time else None,
+                "end_time": _ts_to_readable(item.end_time.timestamp) if item.end_time else None,
                 "attendees_count": len(item.attendees or []),
                 "location": item.location.name if item.location else "",
                 "description": item.description,
