@@ -21,6 +21,51 @@ def _escape_xml(text: str) -> str:
     )
 
 
+def _format_feishu_context(ctx: Optional[dict]) -> str:
+    """Format feishu_context dict as structured markdown for LLM reading."""
+    if not ctx:
+        return "<feishu_context>\n（无飞书上下文数据）\n</feishu_context>"
+
+    parts = ["<feishu_context>"]
+
+    drive = ctx.get("drive") or []
+    if drive:
+        parts.append(f"\n📄 飞书云文档（{len(drive)} 个）：")
+        for f in drive[:10]:
+            modified = f.get("modified_time", "")
+            name = f.get("name", "未命名")
+            ftype = f.get("type", "?")
+            url = f.get("url", "")
+            line = f"  - [{ftype}] {name}（最近修改：{modified}）"
+            if url:
+                line += f"  链接：{url}"
+            parts.append(line)
+
+    tasks = ctx.get("tasks") or []
+    pending = [t for t in tasks if not t.get("completed")]
+    if pending:
+        parts.append(f"\n✅ 待办任务（{len(pending)} 项未完成）：")
+        for t in pending[:15]:
+            due = f"，截止：{t['due']}" if t.get("due") else ""
+            assigned = f"，负责人：{t['assigned_to']}" if t.get("assigned_to") else ""
+            parts.append(f"  - {t.get('summary', '无标题')}{due}{assigned}")
+
+    calendar = ctx.get("calendar") or []
+    if calendar:
+        parts.append(f"\n📅 近期日历事项（{len(calendar)} 项）：")
+        for e in calendar[:15]:
+            start = e.get("start_time", "")
+            end = e.get("end_time", "")
+            time_str = f"{start}" + (f" → {end}" if end else "")
+            parts.append(f"  - {e.get('summary', '无标题')}（{time_str}）")
+
+    if len(parts) == 1:
+        parts.append("\n（飞书上下文已提供但各类数据均为空）")
+
+    parts.append("</feishu_context>")
+    return "\n".join(parts)
+
+
 class ResultSection(BaseModel):
     title: str
     content: str
@@ -103,12 +148,12 @@ class BaseAgent(ABC):
         skills = get_skills_for_agent(self.agent_id)
         skill_section = format_skills_for_prompt(skills)
 
-        ctx_str = str(feishu_context or {})
+        feishu_section = _format_feishu_context(feishu_context)
         base_prompt = self.USER_PROMPT_TEMPLATE.format(
             task_description=f"<user_task>\n{_escape_xml(task_description)}\n</user_task>",
             data_section=data_section,
             upstream_section=upstream_section,
-            feishu_context=f"<feishu_context>\n{ctx_str}\n</feishu_context>",
+            feishu_context=feishu_section,
         )
         if skill_section:
             base_prompt = skill_section + "\n\n" + base_prompt
