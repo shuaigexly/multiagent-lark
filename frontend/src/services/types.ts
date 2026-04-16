@@ -18,12 +18,24 @@ export interface ResultSection {
   content: string;
 }
 
+export interface ChartDataItem {
+  name: string;
+  value: number;
+  unit?: string;
+}
+
+export interface ChartBlock {
+  chart_type: 'bar' | 'pie' | 'line' | 'radar';
+  title?: string;
+  data: ChartDataItem[];
+}
+
 export interface AgentResult {
   agent_id: string;
   agent_name: string;
   sections: ResultSection[];
   action_items: string[];
-  chart_data?: Array<{ name: string; value: number; unit?: string }>;
+  chart_data?: ChartDataItem[] | ChartBlock[];
 }
 
 export interface TaskResultsResponse {
