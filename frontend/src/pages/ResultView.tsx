@@ -16,7 +16,13 @@ import {
   Sparkles,
   Target,
 } from 'lucide-react';
-import { Bar, BarChart, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Bar, BarChart, Tooltip, XAxis, YAxis,
+  PieChart, Pie, Cell, Legend,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  LineChart, Line, CartesianGrid,
+  ResponsiveContainer,
+} from 'recharts';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import FeishuAssetCard from '../components/FeishuAssetCard';
 import { MarkdownContent } from '../components/MarkdownContent';
@@ -28,6 +34,11 @@ import type { AgentResult, ResultSection, TaskResultsResponse } from '../service
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/use-toast';
+
+type ChartDataItem = { name: string; value: number; unit?: string };
+type ChartBlock =
+  | ChartDataItem[]
+  | { chart_type: 'bar' | 'pie' | 'line' | 'radar'; title?: string; data: ChartDataItem[] };
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   done: { label: '已完成', cls: 'bg-success/10 text-success' },
@@ -50,6 +61,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 type ActionTaskState = 'idle' | 'loading' | 'success' | 'error';
 type SectionTone = 'risk' | 'insight' | 'action' | 'default';
+type StructuredChartBlock = Extract<ChartBlock, { chart_type: 'bar' | 'pie' | 'line' | 'radar' }>;
 
 function extractMetrics(sections: ResultSection[]): Array<{ name: string; value: number }> {
   const metrics: Array<{ name: string; value: number }> = [];
@@ -66,6 +78,48 @@ function extractMetrics(sections: ResultSection[]): Array<{ name: string; value:
     }
   }
   return metrics;
+}
+
+function isChartDataItem(item: unknown): item is ChartDataItem {
+  return typeof item === 'object'
+    && item !== null
+    && 'name' in item
+    && 'value' in item
+    && typeof item.name === 'string'
+    && typeof item.value === 'number';
+}
+
+function isStructuredChartBlock(block: unknown): block is StructuredChartBlock {
+  return typeof block === 'object'
+    && block !== null
+    && 'chart_type' in block
+    && 'data' in block
+    && ['bar', 'pie', 'line', 'radar'].includes(String(block.chart_type))
+    && Array.isArray(block.data)
+    && block.data.every(isChartDataItem);
+}
+
+function getChartBlocks(result: AgentResult): StructuredChartBlock[] {
+  const rawChartData = (result as AgentResult & { chart_data?: unknown }).chart_data;
+
+  if (Array.isArray(rawChartData) && rawChartData.length > 0) {
+    const first = rawChartData[0];
+
+    if (isStructuredChartBlock(first)) {
+      return rawChartData.filter(isStructuredChartBlock);
+    }
+
+    if (rawChartData.every(isChartDataItem)) {
+      return [{ chart_type: 'bar', title: '关键指标', data: rawChartData }];
+    }
+  }
+
+  const metrics = extractMetrics(result.sections);
+  if (metrics.length >= 2) {
+    return [{ chart_type: 'bar', title: '关键指标', data: metrics }];
+  }
+
+  return [];
 }
 
 function getSectionTone(title: string): SectionTone {
@@ -212,11 +266,71 @@ function SectionCard({ section, isCeoSummary }: { section: ResultSection; isCeoS
   );
 }
 
+const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
+
+function ChartRenderer({ blocks }: { blocks: StructuredChartBlock[] }) {
+  if (!blocks.length) return null;
+
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, idx) => (
+        <div key={`${block.chart_type}-${block.title ?? idx}`} className="min-w-[280px] rounded-lg bg-white/50 p-2 dark:bg-background/40">
+          {block.title && <p className="mb-1 text-xs font-medium text-gray-500">{block.title}</p>}
+          <div className="h-40 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {block.chart_type === 'pie' ? (
+                <PieChart>
+                  <Pie
+                    data={block.data}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={48}
+                    label={({ name, value }) => `${name}: ${value}`}
+                    labelLine={false}
+                  >
+                    {block.data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Tooltip formatter={(value, name) => [value, name]} />
+                </PieChart>
+              ) : block.chart_type === 'radar' ? (
+                <RadarChart data={block.data}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
+                  <Tooltip />
+                </RadarChart>
+              ) : block.chart_type === 'line' ? (
+                <LineChart data={block.data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(value, name, item) => [`${value}${item?.payload?.unit ?? ''}`, name as string]} />
+                  <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              ) : (
+                <BarChart data={block.data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(value, name, item) => [`${value}${item?.payload?.unit ?? ''}`, name as string]} />
+                  <Bar dataKey="value" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DataAnalystChart({ result }: { result: AgentResult }) {
-  const metrics = extractMetrics(result.sections);
+  const chartBlocks = getChartBlocks(result);
   const numberedActionItems = result.action_items.filter((item) => /\d/.test(item)).slice(0, 3);
 
-  if (metrics.length < 2 && numberedActionItems.length === 0) return null;
+  if (chartBlocks.length === 0 && numberedActionItems.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20">
@@ -227,23 +341,9 @@ function DataAnalystChart({ result }: { result: AgentResult }) {
         </div>
         <BarChart3 className="h-5 w-5 text-primary" />
       </div>
-      {metrics.length >= 2 && (
+      {chartBlocks.length > 0 && (
         <div className="overflow-x-auto">
-          <BarChart width={280} height={160} data={metrics}>
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={32} />
-            <Tooltip
-              cursor={{ fill: 'hsl(var(--primary) / 0.08)' }}
-              contentStyle={{
-                borderRadius: 8,
-                border: '1px solid hsl(var(--border))',
-                background: 'hsl(var(--card))',
-                color: 'hsl(var(--foreground))',
-                fontSize: 12,
-              }}
-            />
-            <Bar dataKey="value" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-          </BarChart>
+          <ChartRenderer blocks={chartBlocks} />
         </div>
       )}
       {numberedActionItems.length > 0 && (

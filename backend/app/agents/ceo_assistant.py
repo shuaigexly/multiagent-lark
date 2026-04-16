@@ -87,6 +87,23 @@ class CEOAssistantAgent(BaseAgent):
 
 ## 管理摘要（一段话）
 （写成 80-120 字完整段落，适合直接发送飞书群，语气专业、直接、不铺垫）
+
+## 跨部门 KPI 概览（图表数据）
+请在分析结尾附加以下JSON块（有2个以上可量化判断时输出）：
+
+```chart_data
+[
+  {
+    "chart_type": "bar",
+    "title": "跨部门 KPI 状态",
+    "data": [
+      {"name": "模块名", "value": 1, "unit": "健康=1/风险=0"}
+    ]
+  }
+]
+```
+
+规则：value 用 1（正常/健康）或 0（需关注/风险）表示各模块状态；data 最多8条；无可靠判断时不输出此块
 """
 
     def _parse_output(self, raw: str):

@@ -90,6 +90,23 @@ class ProductManagerAgent(BaseAgent):
 - [行动1]：具体步骤 + 负责方向 + 时间预期 + 产出物
 - [行动2]：具体步骤 + 负责方向 + 时间预期 + 产出物
 - [行动3]：如无第三项，写“先完成前两项验证后再扩展”
+
+## 功能优先级评分（图表数据）
+请在分析结尾附加以下JSON块（方案建议中有2个以上功能方向时输出）：
+
+```chart_data
+[
+  {
+    "chart_type": "bar",
+    "title": "功能 ICE 优先级分",
+    "data": [
+      {"name": "功能方向", "value": 评分, "unit": "分"}
+    ]
+  }
+]
+```
+
+规则：value 是综合 ICE（Impact×Confidence÷Ease）估算分，1-10整数；data 最多6条；无法量化时不输出此块
 """
 
 
