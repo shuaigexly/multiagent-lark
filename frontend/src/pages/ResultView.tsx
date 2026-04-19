@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
 import {
   ArrowLeft,
   BarChart3,
@@ -27,7 +26,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import FeishuAssetCard from '../components/FeishuAssetCard';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { AGENT_PERSONAS } from '../components/ModuleCard';
-import { getTaskResults, publishTask } from '../services/api';
+import { getTaskResults, publishTask, getOAuthStatus, createFeishuTask } from '../services/api';
 import { getChats } from '../services/feishu';
 import type { FeishuChat } from '../services/feishu';
 import type { AgentResult, ResultSection, TaskResultsResponse } from '../services/types';
@@ -451,8 +450,8 @@ export default function ResultView() {
     }
 
     getChats().then(setChats).catch(() => {});
-    axios.get<{ authorized?: boolean }>(`${BASE_URL}/api/v1/feishu/oauth/status`)
-      .then(({ data: status }) => {
+    getOAuthStatus()
+      .then((status) => {
         setDmAvailable(status?.authorized === true);
       })
       .catch(() => {});
@@ -484,7 +483,7 @@ export default function ResultView() {
     setActionTaskState(item, 'loading');
 
     try {
-      await axios.post(`${BASE_URL}/api/v1/feishu/tasks`, { summary: item, source_task_id: taskId });
+      await createFeishuTask(item, taskId);
       setActionTaskState(item, 'success');
       window.setTimeout(() => setActionTaskState(item, 'idle'), 2000);
     } catch {

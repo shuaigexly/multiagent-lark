@@ -138,9 +138,11 @@ async def _create_table_impl(
     )
     if not resp.success():
         raise RuntimeError(f"创建表格失败: {resp.msg}")
+    if not resp.data:
+        raise RuntimeError(f"创建表格成功但响应数据为空，无法获取 table_id")
 
     table_id = resp.data.table_id
-    existing_field_ids = list(resp.data.field_id_list or []) if resp.data else []
+    existing_field_ids = list(resp.data.field_id_list or [])
     await _ensure_table_fields(client, app_token, table_id, fields, existing_field_ids)
     return table_id
 

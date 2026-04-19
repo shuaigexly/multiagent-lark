@@ -63,62 +63,132 @@ async def _create_via_presentation_api(
     client: lark.Client,
     folder_token: Optional[str] = None,
 ) -> dict:
-    del agent_results
     if not hasattr(client, "arequest"):
         raise AttributeError("lark client does not support raw async requests")
 
-    body = {"title": title}
+    body: dict = {"title": title}
     if folder_token:
         body["folder_token"] = folder_token
 
-    request_candidates = [
+    create_req = (
         lark.BaseRequest.builder()
         .http_method(lark.HttpMethod.POST)
-        .uri("/open-apis/drive/v1/files")
+        .uri("/open-apis/presentation/v1/presentations")
         .token_types({lark.AccessTokenType.TENANT})
-        .queries([("types", "slide")])
         .headers({"Content-Type": "application/json"})
         .body(body)
-        .build(),
-        lark.BaseRequest.builder()
-        .http_method(lark.HttpMethod.POST)
-        .uri("/open-apis/drive/v1/files/create")
-        .token_types({lark.AccessTokenType.TENANT})
-        .headers({"Content-Type": "application/json"})
-        .body({**body, "type": "slide"})
-        .build(),
-    ]
-
-    last_error: Exception | None = None
-    for request in request_candidates:
-        response = await client.arequest(request)
-        if not response.success():
-            last_error = RuntimeError(f"{request.uri} failed: {response.msg} (code={response.code})")
-            continue
-
-        raw_payload = json.loads(response.raw.content or b"{}")
-        data = raw_payload.get("data") or {}
-        file_token = (
-            data.get("file_token")
-            or data.get("token")
-            or data.get("file_id")
-            or data.get("document_id")
+        .build()
+    )
+    response = await client.arequest(create_req)
+    if not response.success():
+        raise RuntimeError(
+            f"Presentation v1 create failed: {response.msg} (code={response.code})"
         )
-        if not file_token:
-            last_error = RuntimeError(f"{request.uri} succeeded but returned no slide token")
-            continue
 
-        url = data.get("url") or f"{get_feishu_base_url()}/slides/{file_token}"
-        return {
-            "presentation_token": file_token,
-            "url": url,
-            "title": title,
-            "type": "slides",
-        }
+    raw = json.loads(response.raw.content or b"{}")
+    presentation_token = raw.get("data", {}).get("presentation", {}).get("token")
+    if not presentation_token:
+        raise RuntimeError("Presentation created but no token in response")
 
-    if last_error is None:
-        last_error = RuntimeError("no presentation API candidate could be attempted")
-    raise last_error
+    if agent_results:
+        await _populate_presentation(client, presentation_token, agent_results)
+
+    url = f"{get_feishu_base_url()}/slides/{presentation_token}"
+    return {
+        "presentation_token": presentation_token,
+        "url": url,
+        "title": title,
+        "type": "slides",
+    }
+
+
+async def _populate_presentation(
+    client: lark.Client,
+    presentation_token: str,
+    agent_results: list[AgentResult],
+) -> None:
+    """Populate a new presentation with one slide per agent result."""
+    slides_resp = await client.arequest(
+        lark.BaseRequest.builder()
+        .http_method(lark.HttpMethod.GET)
+        .uri(f"/open-apis/presentation/v1/presentations/{presentation_token}/slides")
+        .token_types({lark.AccessTokenType.TENANT})
+        .build()
+    )
+    if not slides_resp.success():
+        raise RuntimeError(f"Could not list slides: {slides_resp.msg}")
+
+    slides_data = json.loads(slides_resp.raw.content or b"{}")
+    existing_ids: list[str] = slides_data.get("data", {}).get("slide_ids", [])
+
+    for idx, result in enumerate(agent_results):
+        if idx < len(existing_ids):
+            slide_id = existing_ids[idx]
+        else:
+            new_slide_resp = await client.arequest(
+                lark.BaseRequest.builder()
+                .http_method(lark.HttpMethod.POST)
+                .uri(
+                    f"/open-apis/presentation/v1/presentations/{presentation_token}/slides"
+                )
+                .token_types({lark.AccessTokenType.TENANT})
+                .headers({"Content-Type": "application/json"})
+                .body({"index": idx})
+                .build()
+            )
+            if not new_slide_resp.success():
+                logger.warning("Slide %d creation failed: %s", idx, new_slide_resp.msg)
+                continue
+            slide_data = json.loads(new_slide_resp.raw.content or b"{}")
+            slide_id = slide_data.get("data", {}).get("slide", {}).get("slide_id", "")
+            if not slide_id:
+                continue
+
+        bullets = _build_slide_bullets(result)
+        body_text = "\n".join(f"• {b}" for b in bullets) if bullets else "暂无可展示内容"
+        agent_name = result.agent_name or "分析结果"
+
+        add_resp = await client.arequest(
+            lark.BaseRequest.builder()
+            .http_method(lark.HttpMethod.POST)
+            .uri(
+                f"/open-apis/presentation/v1/presentations/{presentation_token}"
+                f"/slides/{slide_id}/elements"
+            )
+            .token_types({lark.AccessTokenType.TENANT})
+            .headers({"Content-Type": "application/json"})
+            .body({
+                "requestType": "insert_after",
+                "elements": [
+                    {
+                        "element_type": "shape",
+                        "shape": {
+                            "shape_type": "text_box",
+                            "position": {"x": 36, "y": 36, "width": 648, "height": 72},
+                            "text": {
+                                "elements": [{"text_run": {"content": agent_name}}],
+                            },
+                        },
+                    },
+                    {
+                        "element_type": "shape",
+                        "shape": {
+                            "shape_type": "text_box",
+                            "position": {"x": 36, "y": 130, "width": 648, "height": 360},
+                            "text": {
+                                "elements": [{"text_run": {"content": body_text[:800]}}],
+                            },
+                        },
+                    },
+                ],
+            })
+            .build()
+        )
+        if not add_resp.success():
+            logger.warning(
+                "Elements not added to slide %s (%s): %s",
+                slide_id, agent_name, add_resp.msg,
+            )
 
 
 async def _create_slides_as_doc(
@@ -127,7 +197,6 @@ async def _create_slides_as_doc(
     client: lark.Client,
     folder_token: Optional[str] = None,
 ) -> dict:
-    del client
     block_specs: list[RichBlockSpec] = [
         RichBlockSpec(block=build_heading_block(1, title)),
         RichBlockSpec(block=build_divider_block()),

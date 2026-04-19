@@ -115,6 +115,9 @@ async def orchestrate(
     3. Within a wave, run agents in parallel
     4. ceo_assistant always in the final wave (SEQUENTIAL_LAST)
     """
+    if not selected_modules:
+        raise ValueError("未选择任何 Agent 模块，请至少选择一个模块后再执行。")
+
     can_proceed, no_data_message = _assess_data_availability(data_summary, feishu_context)
     if not can_proceed:
         # Return a single informational result instead of running agents

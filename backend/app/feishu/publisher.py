@@ -235,7 +235,7 @@ async def publish_results(
                 task_id=task_id,
                 asset_type="card",
                 title="互动卡片",
-                feishu_url=card_result.get("url"),
+                feishu_url=card_result.get("url") or "",
                 feishu_id=card_result["message_id"],
             )
             db.add(asset)
@@ -261,7 +261,7 @@ async def publish_results(
                 published.append({
                     "type": "card",
                     "title": "互动卡片已发送",
-                    "url": card_result.get("url"),
+                    "url": card_result.get("url") or "",
                     "message_id": card_result["message_id"],
                 })
                 succeeded.add("card")

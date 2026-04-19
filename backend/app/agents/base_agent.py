@@ -110,7 +110,14 @@ class BaseAgent(ABC):
             verdict = await self._reflect_on_output(raw, task_description)
             if verdict and not verdict.strip().upper().startswith("PASS"):
                 try:
-                    raw = await self._call_llm(prompt)
+                    feedback_prompt = (
+                        prompt
+                        + "\n\n<quality_feedback>\n"
+                        f"你的上一次输出被评审为质量不足。评审意见：{verdict}\n"
+                        "请针对以上不足重新分析，确保输出更完整、更具体，不要重复同样的问题。\n"
+                        "</quality_feedback>"
+                    )
+                    raw = await self._call_llm(feedback_prompt)
                 except Exception:
                     pass
         return self._parse_output(raw)

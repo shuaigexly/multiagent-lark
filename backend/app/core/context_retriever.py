@@ -3,8 +3,11 @@ ContextRetriever：检索用户关联的飞书资产作为任务上下文
 MVP 阶段：从 feishu_context 字段读取用户手动提供的飞书资产列表
 后续可扩展为：搜索飞书知识库、文档列表等
 """
+import logging
 from typing import Optional
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class FeishuAsset(BaseModel):
@@ -35,8 +38,8 @@ async def retrieve_context(
     for a in raw_assets:
         try:
             assets.append(FeishuAsset(**a))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Skipping invalid feishu asset %r: %s", a, exc)
 
     if assets:
         titles = "、".join(a.title for a in assets)

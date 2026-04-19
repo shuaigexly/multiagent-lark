@@ -89,6 +89,18 @@ export async function listAgents(): Promise<AgentInfo[]> {
   return resp.data.agents;
 }
 
+export async function getOAuthStatus(): Promise<{ authorized?: boolean }> {
+  const resp = await api.get<{ authorized?: boolean }>('/api/v1/feishu/oauth/status');
+  return resp.data;
+}
+
+export async function createFeishuTask(
+  summary: string,
+  sourceTaskId: string
+): Promise<void> {
+  await api.post('/api/v1/feishu/tasks', { summary, source_task_id: sourceTaskId });
+}
+
 export function createSSEConnection(taskId: string): EventSource {
   const apiKey = import.meta.env.VITE_API_KEY || '';
   const url = `${BASE_URL}/api/v1/tasks/${taskId}/events${

@@ -1,4 +1,10 @@
-"""Async client for @larksuiteoapi/lark-mcp MCP server (JSON-RPC 2.0 over stdin/stdout)."""
+"""
+Async client for @larksuiteoapi/lark-mcp MCP server (JSON-RPC 2.0 over stdin/stdout).
+
+预留功能：call_tool() 和 list_tools() 目前未被业务代码调用，
+作为飞书 MCP 工具的扩展接口保留，供未来集成使用。
+shutdown() 在应用关闭时自动调用，若进程从未启动则安全跳过。
+"""
 import asyncio
 import json
 import logging

@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/v1/feishu", tags=["feishu-oauth"])
 logger = logging.getLogger(__name__)
 
 CALLBACK_PATH = "/api/v1/feishu/oauth/callback"
-STATE_TTL_SECONDS = 10 * 60
+STATE_TTL_SECONDS = int(os.getenv("OAUTH_STATE_TTL_SECONDS", "600"))
 _pending_states: dict[str, tuple[str, float]] = {}
 
 

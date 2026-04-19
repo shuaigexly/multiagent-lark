@@ -364,8 +364,20 @@ def _build_text_block(block_type: int, text: str) -> Block:
     return Block.builder().block_type(block_type).__getattribute__(attr)(block_text).build()
 
 
+def _smart_truncate(text: str, max_len: int) -> str:
+    """Truncate at a sentence boundary to avoid cutting mid-sentence."""
+    if len(text) <= max_len:
+        return text
+    truncated = text[:max_len]
+    for sep in ("。", "！", "？", "\n", ".", "!", "?"):
+        idx = truncated.rfind(sep)
+        if idx > max_len // 2:
+            return truncated[: idx + 1]
+    return truncated
+
+
 def _build_block_text(text: str) -> Text:
-    cleaned = text.strip()[:MAX_DOC_TEXT_LENGTH]
+    cleaned = _smart_truncate(text.strip(), MAX_DOC_TEXT_LENGTH)
     text_run = TextRun.builder().content(cleaned).build()
     text_elem = TextElement.builder().text_run(text_run).build()
     return Text.builder().elements([text_elem]).build()
@@ -377,11 +389,11 @@ def _extract_lines(text: str, max_lines: int) -> list[str]:
     if cleaned:
         return cleaned[:max_lines]
     compact = _clean_line(text)
-    return [compact[:MAX_DOC_TEXT_LENGTH]] if compact else []
+    return [compact] if compact else []
 
 
 def _clean_line(line: str) -> str:
-    return _LIST_PREFIX_RE.sub("", line.strip())[:MAX_DOC_TEXT_LENGTH]
+    return _smart_truncate(_LIST_PREFIX_RE.sub("", line.strip()), MAX_DOC_TEXT_LENGTH)
 
 
 def _chunked(items: Sequence, size: int) -> Iterable[Sequence]:

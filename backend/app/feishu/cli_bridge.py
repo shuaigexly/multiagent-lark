@@ -10,6 +10,7 @@ from app.core.settings import get_feishu_app_id, get_feishu_app_secret
 
 logger = logging.getLogger(__name__)
 CLI_AVAILABLE: Optional[bool] = None
+_LARK_CLI_VERSION = os.getenv("LARK_CLI_VERSION", "1.1.0")
 
 
 def is_cli_available() -> bool:
@@ -24,7 +25,7 @@ async def cli_create_doc(title: str, markdown: str, folder_token: Optional[str] 
     args = [
         "npx",
         "--yes",
-        "@larksuite/cli@1.1.0",
+        f"@larksuite/cli@{_LARK_CLI_VERSION}",
         "lark-doc",
         "+create",
         "--title",
@@ -46,7 +47,7 @@ async def cli_create_slides(
     args = [
         "npx",
         "--yes",
-        "@larksuite/cli@1.1.0",
+        f"@larksuite/cli@{_LARK_CLI_VERSION}",
         "lark-slides",
         "+create",
         "--title",

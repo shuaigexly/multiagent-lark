@@ -46,12 +46,32 @@
 | 模块 ID | 中文名 | 职责 | 执行顺序 |
 |---------|--------|------|----------|
 | `data_analyst` | 数据分析师 | 数据趋势、异常、核心指标洞察 | 第一波（无依赖） |
-| `finance_advisor` | 财务顾问 | 收支结构、现金流、财务风险 | 第二波（依赖 data_analyst） |
+| `finance_advisor` | 财务顾问 | 收支结构、现金流、财务风险 | 第二波（依赖 `data_analyst`） |
 | `seo_advisor` | SEO/增长顾问 | 流量结构、关键词机会、内容增长 | 第一波（无依赖） |
 | `content_manager` | 内容负责人 | 文档写作、知识库整理、内容归档 | 第一波（无依赖） |
 | `product_manager` | 产品经理 | 需求分析、PRD、产品路线图 | 第一波（无依赖） |
 | `operations_manager` | 运营负责人 | 行动拆解、任务分配、执行跟进 | 第一波（无依赖） |
-| `ceo_assistant` | CEO 助理 | 汇总所有结论，生成管理决策摘要 | 最后波（依赖所有上游） |
+| `ceo_assistant` | CEO 助理 | 汇总所有结论，生成管理决策摘要 | 最后波（依赖所有已选上游） |
+
+> 依赖关系由 `registry.py::AGENT_DEPENDENCIES` 的 DAG 拓扑排序决定。`finance_advisor` 在 `data_analyst` 完成后才启动；`ceo_assistant` 始终最后执行，接收所有上游输出。
+
+---
+
+## 任务类型
+
+AI 自动从以下 9 种类型中识别并推荐 Agent 组合（也可手动调整）：
+
+| 任务类型 ID | 中文名 | 默认 Agent 组合 |
+|-------------|--------|----------------|
+| `business_analysis` | 经营分析 | data_analyst → finance_advisor → ceo_assistant |
+| `project_evaluation` | 立项评估 | product_manager → finance_advisor → ceo_assistant |
+| `content_growth` | 内容增长 | seo_advisor + content_manager + operations_manager |
+| `risk_analysis` | 风险分析 | finance_advisor + operations_manager → ceo_assistant |
+| `knowledge_organization` | 知识整理 | content_manager |
+| `document_processing` | 文档处理 | content_manager |
+| `calendar_analysis` | 日历整理 | data_analyst |
+| `chat_organization` | 群聊整理 | content_manager |
+| `general` | 综合分析 | data_analyst + operations_manager → ceo_assistant |
 
 ---
 
@@ -125,7 +145,7 @@ cd multiagent-lark
 ### 1. 配置环境变量
 
 ```bash
-cp .env.example backend/.env
+cp backend/.env.example backend/.env
 # 编辑 backend/.env：
 # LLM_PROVIDER=openai_compatible
 # LLM_API_KEY=sk-xxx
@@ -188,7 +208,31 @@ npm run dev
 - 智谱 GLM
 - Ollama（本地部署）
 
-飞书 Aily 模式：设置 `LLM_PROVIDER=feishu_aily`，需企业开通飞书 AI 智能伙伴。
+飞书 Aily 模式：设置 `LLM_PROVIDER=feishu_aily` 并配置 `AILY_APP_ID`，需企业开通飞书 AI 智能伙伴（在飞书开放平台创建 Aily 应用并申请 `aily:session` 权限）。
+
+---
+
+## 国际版 Lark 支持
+
+设置 `FEISHU_REGION=intl` 后系统自动切换到国际版 Lark API 端点（`open.larksuite.com`）。需额外安装国际版 SDK：
+
+```bash
+pip install larksuite-oapi
+```
+
+在 [https://open.larksuite.com/](https://open.larksuite.com/) 创建企业自建应用，其余配置与中国版一致。
+
+---
+
+## API 安全
+
+在 `backend/.env` 中设置 `API_KEY=<your-secret>` 后，所有后端 API 请求均需携带：
+
+```
+X-API-Key: <your-secret>
+```
+
+留空则进入开发模式（无鉴权），**生产部署请务必设置**。
 
 ---
 
@@ -197,13 +241,13 @@ npm run dev
 ### v3.0（当前）
 - **飞书 OAuth 用户授权**：新增完整 OAuth2 流程（`/oauth/url` → 飞书授权 → `/oauth/callback`），user_access_token 持久化存储到数据库，服务重启自动恢复
 - **飞书任务用户归属**：创建任务时通过 user_access_token 将任务归属到授权用户，出现在「我负责的」列表
-- **飞书上下文自动读取文档内容**：无上传文件时，自动读取飞书上下文中的文档正文（最多 2 篇）作为 Agent 分析数据源
+- **飞书上下文自动读取文档内容**：无上传文件时，自动读取飞书上下文关联的飞书文档正文作为 Agent 分析数据源
 - **云盘/日历使用用户 token**：drive、calendar API 优先使用 user_access_token，提升访问权限覆盖范围
 - **群消息发布前置校验**：发布前验证 chat_id 不为空，避免静默失败
 - **飞书工作区页面**：新增独立浏览页，支持文档/日历/任务/群聊四 Tab 查看
 - **富文本文档发布**：doc.py 升级为结构化块（heading2/3、callout、bullet、divider），不再发布纯文本
 - **增强多维表格**：bitable.py 生成双表（行动清单含单选优先级/状态/来源模块字段 + 分析摘要表）
-- **演示文稿发布**：新增 slides.py，尝试 Feishu Presentation API，失败自动降级为结构化文档
+- **演示文稿发布**：新增 slides.py，优先走 lark-cli XML 路径，其次调用 Presentation v1 API 并逐 Agent 填充幻灯片内容，最终降级为结构化文档（三层降级，每层均保证内容不为空）
 
 ### v2.0
 - **多 Agent 架构升级**：依赖感知波次执行，data_analyst → finance_advisor → ceo_assistant 按序推进
