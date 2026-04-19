@@ -58,11 +58,14 @@ async def _get_tenant_access_token() -> str:
                 "app_secret": settings.feishu_app_secret,
             },
         )
+    resp.raise_for_status()
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"获取飞书 token 失败: {data}")
 
-    token = data["tenant_access_token"]
+    token = data.get("tenant_access_token")
+    if not token:
+        raise RuntimeError(f"飞书 token 响应缺少 tenant_access_token 字段: {data}")
     _TOKEN_CACHE["token"] = token
     _TOKEN_CACHE["expire"] = now + data.get("expire", 7200)
     return token
@@ -106,10 +109,14 @@ async def call_aily(
             headers=headers,
             json={"channel_context": {"aily_app_id": app_id}},
         )
+        r.raise_for_status()
         d = r.json()
         if d.get("code") != 0:
             raise RuntimeError(f"Aily 创建会话失败: code={d.get('code')} msg={d.get('msg')}")
-        session_id = d["data"]["session"]["id"]
+        try:
+            session_id = d["data"]["session"]["id"]
+        except (KeyError, TypeError) as exc:
+            raise RuntimeError(f"Aily 会话响应结构异常: {d}") from exc
         logger.debug("Aily session created: %s", session_id)
 
         # Step 2: 创建运行
@@ -126,10 +133,14 @@ async def call_aily(
                 ],
             },
         )
+        r.raise_for_status()
         d = r.json()
         if d.get("code") != 0:
             raise RuntimeError(f"Aily 创建运行失败: code={d.get('code')} msg={d.get('msg')}")
-        run_id = d["data"]["run"]["id"]
+        try:
+            run_id = d["data"]["run"]["id"]
+        except (KeyError, TypeError) as exc:
+            raise RuntimeError(f"Aily 运行响应结构异常: {d}") from exc
         logger.debug("Aily run created: %s", run_id)
 
     # Step 3: 轮询等待完成
@@ -148,11 +159,15 @@ async def call_aily(
                 f"{base}/sessions/{session_id}/runs/{run_id}",
                 headers=headers,
             )
+        r.raise_for_status()
         d = r.json()
         if d.get("code") != 0:
             raise RuntimeError(f"Aily 查询状态失败: code={d.get('code')} msg={d.get('msg')}")
 
-        run_status = d["data"]["run"]["status"]
+        try:
+            run_status = d["data"]["run"]["status"]
+        except (KeyError, TypeError) as exc:
+            raise RuntimeError(f"Aily 轮询响应结构异常: {d}") from exc
         logger.debug("Aily run %s status: %s", run_id, run_status)
 
         if run_status == "COMPLETED":

@@ -93,7 +93,14 @@ async def create_task(
         input_file_path = os.path.join(settings.upload_dir, safe_name)
         async with aiofiles.open(input_file_path, "wb") as f:
             await f.write(content)
-        file_content = content.decode("utf-8", errors="replace")
+        for _enc in ("utf-8", "gbk", "gb18030", "latin-1"):
+            try:
+                file_content = content.decode(_enc)
+                break
+            except (UnicodeDecodeError, LookupError):
+                continue
+        else:
+            raise HTTPException(422, "文件编码无法识别，请另存为 UTF-8 后重新上传")
 
     # 拼接用于规划的文本
     planning_text = input_text or ""
