@@ -66,7 +66,10 @@ class EditorAgent:
             },
         )
         if performance_table_id:
-            await update_agent_performance(app_token, performance_table_id, self.agent_name, "内容编辑")
+            try:
+                await update_agent_performance(app_token, performance_table_id, self.agent_name, "内容编辑")
+            except Exception as exc:
+                logger.warning("Editor: performance tracking failed for [%s]: %s", title, exc)
         logger.info("Editor: [%s] → 待审核", title)
 
 
@@ -106,10 +109,13 @@ class ReviewerAgent:
 
         await bitable_ops.update_record(app_token, table_id, record_id, update_fields)
         if performance_table_id:
-            await update_agent_performance(
-                app_token, performance_table_id, self.agent_name, "内容审核员",
-                score=score, passed=approved,
-            )
+            try:
+                await update_agent_performance(
+                    app_token, performance_table_id, self.agent_name, "内容审核员",
+                    score=score, passed=approved,
+                )
+            except Exception as exc:
+                logger.warning("Reviewer: performance tracking failed for [%s]: %s", title, exc)
         logger.info("Reviewer: [%s] → %s (score=%s)", title, new_status, score)
 
 
@@ -125,11 +131,18 @@ class AnalystAgent:
         period: Optional[str] = None,
     ) -> str:
         period = period or datetime.now().strftime("%Y-%m-%d")
-        records = await bitable_ops.list_records(app_token, content_table_id, page_size=100)
-
-        # 仅统计本周期未归档记录（PUBLISHED 和 REJECTED），已标记 ANALYZED 的属于历史批次
-        published = [r for r in records if r.get("fields", {}).get("状态") == Status.PUBLISHED]
-        rejected = [r for r in records if r.get("fields", {}).get("状态") == Status.REJECTED]
+        # Fetch only unarchived records via filtered API calls — fetching all records
+        # and filtering in Python breaks once the table exceeds max_records total rows.
+        published = await bitable_ops.list_records(
+            app_token, content_table_id,
+            filter_expr=f'CurrentValue.[状态]="{Status.PUBLISHED}"',
+            page_size=100, max_records=1000,
+        )
+        rejected = await bitable_ops.list_records(
+            app_token, content_table_id,
+            filter_expr=f'CurrentValue.[状态]="{Status.REJECTED}"',
+            page_size=100, max_records=1000,
+        )
         total = len(published) + len(rejected)
 
         if total == 0:
