@@ -13,7 +13,6 @@ class Status:
     PENDING_TOPIC = "待选题"
     WRITING = "写作中"
     PENDING_REVIEW = "待审核"
-    APPROVED = "审核通过"
     REJECTED = "审核拒绝"
     PUBLISHED = "已发布"
     ANALYZED = "已分析"
@@ -23,7 +22,6 @@ _ALL_STATUSES = [
     Status.PENDING_TOPIC,
     Status.WRITING,
     Status.PENDING_REVIEW,
-    Status.APPROVED,
     Status.REJECTED,
     Status.PUBLISHED,
     Status.ANALYZED,

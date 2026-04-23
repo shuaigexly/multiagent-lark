@@ -85,7 +85,7 @@ async def run_workflow_loop(
             logger.info("Cycle %d: processed %d records", cycle, processed)
 
             if cycle % analysis_every == 0:
-                period = datetime.now().strftime("%Y-%m-%d 第%d轮" % cycle)
+                period = datetime.now().strftime("%Y-%m-%d") + f" 第{cycle}轮"
                 await _analyst.analyze(
                     app_token,
                     table_ids["content"],

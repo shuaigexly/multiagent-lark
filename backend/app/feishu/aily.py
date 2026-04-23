@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 _TOKEN_CACHE: dict = {}
 
 
+def get_feishu_open_base_url() -> str:
+    return _get_feishu_open_base_url()
+
+
 def _get_feishu_open_base_url() -> str:
     base_url = get_feishu_base_url().rstrip("/")
     if base_url.startswith("https://open."):
@@ -40,6 +44,10 @@ def _get_feishu_open_base_url() -> str:
 
     region = get_feishu_region().strip().lower()
     return "https://open.larksuite.com" if region == "intl" else "https://open.feishu.cn"
+
+
+async def get_tenant_access_token() -> str:
+    return await _get_tenant_access_token()
 
 
 async def _get_tenant_access_token() -> str:

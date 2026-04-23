@@ -82,7 +82,8 @@ class ReviewerAgent:
             max_tokens=200,
         )
 
-        approved = "通过" in verdict and not verdict.startswith("拒绝")
+        conclusion_line = next((l for l in verdict.splitlines() if "结论" in l), verdict[:50])
+        approved = "通过" in conclusion_line and "拒绝" not in conclusion_line
         score = _extract_score(verdict)
         new_status = Status.PUBLISHED if approved else Status.REJECTED
 
@@ -115,11 +116,12 @@ class AnalystAgent:
 
         total = len(records)
         published = [r for r in records if r.get("fields", {}).get("状态") in (Status.PUBLISHED, Status.ANALYZED)]
-        approved_or_published = [
+        # 通过率 = 已发布 / 已进入审核流程（排除尚未开始的待选题和写作中）
+        reviewed = [
             r for r in records
-            if r.get("fields", {}).get("状态") in (Status.APPROVED, Status.PUBLISHED, Status.ANALYZED)
+            if r.get("fields", {}).get("状态") not in (Status.PENDING_TOPIC, Status.WRITING)
         ]
-        approve_rate = round(len(approved_or_published) / total * 100, 1) if total else 0.0
+        approve_rate = round(len(published) / len(reviewed) * 100, 1) if reviewed else 0.0
         scores = [
             float(r["fields"]["质量评分"])
             for r in published
