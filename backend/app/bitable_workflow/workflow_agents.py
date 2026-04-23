@@ -107,7 +107,8 @@ class ReviewerAgent:
         await bitable_ops.update_record(app_token, table_id, record_id, update_fields)
         if performance_table_id:
             await update_agent_performance(
-                app_token, performance_table_id, self.agent_name, "内容审核员", score=score
+                app_token, performance_table_id, self.agent_name, "内容审核员",
+                score=score, passed=approved,
             )
         logger.info("Reviewer: [%s] → %s (score=%s)", title, new_status, score)
 
@@ -126,14 +127,11 @@ class AnalystAgent:
         period = period or datetime.now().strftime("%Y-%m-%d")
         records = await bitable_ops.list_records(app_token, content_table_id, page_size=100)
 
-        total = len(records)
-        published = [r for r in records if r.get("fields", {}).get("状态") in (Status.PUBLISHED, Status.ANALYZED)]
-        # 通过率 = 已发布 / 已进入审核流程（排除尚未开始的待选题和写作中）
-        reviewed = [
-            r for r in records
-            if r.get("fields", {}).get("状态") not in (Status.PENDING_TOPIC, Status.WRITING)
-        ]
-        approve_rate = round(len(published) / len(reviewed) * 100, 1) if reviewed else 0.0
+        # 仅统计本周期新发布（PUBLISHED），已标记 ANALYZED 的属于历史批次
+        published = [r for r in records if r.get("fields", {}).get("状态") == Status.PUBLISHED]
+        rejected = [r for r in records if r.get("fields", {}).get("状态") == Status.REJECTED]
+        total = len(published) + len(rejected)
+        approve_rate = round(len(published) / total * 100, 1) if total else 0.0
         scores = [
             float(r["fields"]["质量评分"])
             for r in published
@@ -195,10 +193,9 @@ async def update_agent_performance(
     role: str,
     tasks_delta: int = 1,
     score: Optional[float] = None,
+    passed: Optional[bool] = None,
 ) -> None:
-    """在员工效能表中写入或更新本轮处理记录。"""
-    from app.bitable_workflow import bitable_ops
-
+    """在员工效能表中更新员工处理量、平均质量分、通过率。"""
     existing = await bitable_ops.list_records(
         app_token,
         performance_table_id,
@@ -210,26 +207,44 @@ async def update_agent_performance(
         record = existing[0]
         rid = record["record_id"]
         fields = record.get("fields", {})
-        prev_count = fields.get("处理任务数", 0) or 0
-        prev_avg = fields.get("平均质量分", 0.0) or 0.0
+        prev_count = float(fields.get("处理任务数", 0) or 0)
+        prev_avg = float(fields.get("平均质量分", 0.0) or 0.0)
+        prev_pass_rate = float(fields.get("通过率", 0.0) or 0.0)
         new_count = prev_count + tasks_delta
+
+        # 滚动平均质量分（仅有评分时更新）
         if score is not None and new_count > 0:
             new_avg = round((prev_avg * prev_count + score) / new_count, 1)
         else:
             new_avg = prev_avg
+
+        # 滚动通过率（仅审核员有 passed 时更新）
+        if passed is not None and new_count > 0:
+            prev_approved = round(prev_pass_rate * prev_count / 100)
+            new_approved = prev_approved + (1 if passed else 0)
+            new_pass_rate = round(new_approved / new_count * 100, 1)
+        else:
+            new_pass_rate = prev_pass_rate
+
         await bitable_ops.update_record(
             app_token, performance_table_id, rid,
-            {"处理任务数": new_count, "平均质量分": new_avg, "更新时间": now_str},
+            {
+                "处理任务数": new_count,
+                "平均质量分": new_avg,
+                "通过率": new_pass_rate,
+                "更新时间": now_str,
+            },
         )
     else:
+        initial_pass_rate = 100.0 if passed is True else (0.0 if passed is False else 0.0)
         await bitable_ops.create_record(
             app_token, performance_table_id,
             {
                 "员工姓名": agent_name,
                 "角色": role,
-                "处理任务数": tasks_delta,
-                "通过率": 0.0,
-                "平均质量分": score or 0.0,
+                "处理任务数": float(tasks_delta),
+                "通过率": initial_pass_rate,
+                "平均质量分": score if score is not None else 0.0,
                 "更新时间": now_str,
             },
         )

@@ -54,7 +54,7 @@ async def list_records(
         if not page_token:
             break
 
-    return all_items
+    return all_items[:max_records]
 
 
 async def create_record(app_token: str, table_id: str, fields: dict) -> str:

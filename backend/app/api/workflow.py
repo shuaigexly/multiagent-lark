@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.bitable_workflow import bitable_ops, runner
 from app.bitable_workflow.schema import Status
@@ -28,6 +28,14 @@ class StartRequest(BaseModel):
     table_ids: dict
     interval: int = 30
     analysis_every: int = 5
+
+    @model_validator(mode="after")
+    def check_table_ids(self) -> "StartRequest":
+        required = {"content", "performance", "report"}
+        missing = required - self.table_ids.keys()
+        if missing:
+            raise ValueError(f"table_ids 缺少必需键: {missing}")
+        return self
 
 
 class SeedRequest(BaseModel):
