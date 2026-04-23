@@ -80,7 +80,7 @@ async def workflow_setup(req: SetupRequest):
 @router.post("/start")
 async def workflow_start(req: StartRequest, background_tasks: BackgroundTasks):
     """启动持续调度循环（后台运行）。"""
-    if runner.is_running():
+    if not runner.mark_starting():
         raise HTTPException(status_code=400, detail="Workflow already running")
     _state.update({"app_token": req.app_token, "table_ids": req.table_ids})
     background_tasks.add_task(

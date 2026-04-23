@@ -63,6 +63,20 @@ async def setup_workflow(name: str = "内容运营虚拟组织") -> dict:
     }
 
 
+def mark_starting() -> bool:
+    """Atomically mark the loop as starting before the background task fires.
+
+    Returns True if the transition succeeded (was idle), False if already running.
+    Call this in the API handler immediately before scheduling the background task
+    so that a second concurrent /start request sees is_running()=True and is rejected.
+    """
+    global _running
+    if _running:
+        return False
+    _running = True
+    return True
+
+
 async def run_workflow_loop(
     app_token: str,
     table_ids: dict,
@@ -77,7 +91,7 @@ async def run_workflow_loop(
     - 每 analysis_every 轮，触发 AnalystAgent 生成周报
     """
     global _running, _stop_event
-    _running = True
+    _running = True  # belt-and-suspenders; mark_starting() already set this
     _stop_event = asyncio.Event()
     cycle = 0
     logger.info("Workflow loop started (interval=%ds, analysis_every=%d)", interval, analysis_every)

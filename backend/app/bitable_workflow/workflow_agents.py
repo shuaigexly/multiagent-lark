@@ -57,6 +57,8 @@ class EditorAgent:
             temperature=0.7,
             max_tokens=800,
         )
+        if not draft.strip():
+            raise RuntimeError(f"Editor LLM returned empty draft for [{title}]")
 
         await bitable_ops.update_record(
             app_token, table_id, record_id,
@@ -92,6 +94,8 @@ class ReviewerAgent:
             temperature=0.2,
             max_tokens=200,
         )
+        if not verdict.strip():
+            raise RuntimeError(f"Reviewer LLM returned empty verdict for [{title}]")
 
         conclusion_line = next((l for l in verdict.splitlines() if "结论" in l), verdict[:50])
         approved = "通过" in conclusion_line and "拒绝" not in conclusion_line
