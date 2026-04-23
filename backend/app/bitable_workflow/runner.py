@@ -78,6 +78,8 @@ async def run_workflow_loop(
     cycle = 0
     logger.info("Workflow loop started (interval=%ds, analysis_every=%d)", interval, analysis_every)
 
+    analysis_every = max(1, analysis_every)
+
     while _running:
         cycle += 1
         try:

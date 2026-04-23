@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.bitable_workflow import bitable_ops, runner
 from app.bitable_workflow.schema import Status
@@ -26,8 +26,8 @@ class SetupRequest(BaseModel):
 class StartRequest(BaseModel):
     app_token: str
     table_ids: dict
-    interval: int = 30
-    analysis_every: int = 5
+    interval: int = Field(default=30, ge=1)
+    analysis_every: int = Field(default=5, ge=1)
 
     @model_validator(mode="after")
     def check_table_ids(self) -> "StartRequest":

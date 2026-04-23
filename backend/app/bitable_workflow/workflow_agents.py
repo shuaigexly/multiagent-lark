@@ -127,11 +127,16 @@ class AnalystAgent:
         period = period or datetime.now().strftime("%Y-%m-%d")
         records = await bitable_ops.list_records(app_token, content_table_id, page_size=100)
 
-        # 仅统计本周期新发布（PUBLISHED），已标记 ANALYZED 的属于历史批次
+        # 仅统计本周期未归档记录（PUBLISHED 和 REJECTED），已标记 ANALYZED 的属于历史批次
         published = [r for r in records if r.get("fields", {}).get("状态") == Status.PUBLISHED]
         rejected = [r for r in records if r.get("fields", {}).get("状态") == Status.REJECTED]
         total = len(published) + len(rejected)
-        approve_rate = round(len(published) / total * 100, 1) if total else 0.0
+
+        if total == 0:
+            logger.info("Analyst: no new records in period=%s, skipping report", period)
+            return ""
+
+        approve_rate = round(len(published) / total * 100, 1)
         scores = [
             float(r["fields"]["质量评分"])
             for r in published
@@ -165,7 +170,8 @@ class AnalystAgent:
             },
         )
 
-        for r in published:
+        # Archive both published and rejected so they don't re-enter the next period's count
+        for r in published + rejected:
             await bitable_ops.update_record(
                 app_token, content_table_id, r["record_id"],
                 {"状态": Status.ANALYZED},
