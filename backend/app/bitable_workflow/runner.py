@@ -8,6 +8,7 @@ stop_workflow()   — 停止循环
 import asyncio
 import logging
 from datetime import datetime
+from typing import Optional
 
 from app.bitable_workflow import bitable_ops, schema
 from app.bitable_workflow.scheduler import run_one_cycle
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 _analyst = AnalystAgent()
 _running = False
+_stop_event: Optional[asyncio.Event] = None
 analyze_lock = asyncio.Lock()  # shared with api/workflow.py to prevent concurrent reports
 
 
@@ -74,8 +76,9 @@ async def run_workflow_loop(
     - 调用 run_one_cycle() 处理待选题 + 待审核
     - 每 analysis_every 轮，触发 AnalystAgent 生成周报
     """
-    global _running
+    global _running, _stop_event
     _running = True
+    _stop_event = asyncio.Event()
     cycle = 0
     logger.info("Workflow loop started (interval=%ds, analysis_every=%d)", interval, analysis_every)
 
@@ -100,9 +103,15 @@ async def run_workflow_loop(
             except Exception as exc:
                 logger.error("Workflow cycle %d error: %s", cycle, exc)
 
-            await asyncio.sleep(interval)
+            # Interruptible sleep: wakes immediately if stop_workflow() is called
+            try:
+                await asyncio.wait_for(_stop_event.wait(), timeout=float(interval))
+                break  # stop_event was set — exit loop without waiting full interval
+            except asyncio.TimeoutError:
+                pass  # normal interval elapsed, continue
     finally:
         _running = False
+        _stop_event = None
 
     logger.info("Workflow loop stopped after %d cycles", cycle)
 
@@ -110,6 +119,8 @@ async def run_workflow_loop(
 def stop_workflow() -> None:
     global _running
     _running = False
+    if _stop_event is not None:
+        _stop_event.set()
 
 
 def is_running() -> bool:

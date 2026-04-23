@@ -4,11 +4,15 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.bitable_workflow import bitable_ops, runner
-from app.bitable_workflow.schema import Status
+from app.bitable_workflow.schema import CONTENT_TASK_FIELDS, Status
 from app.bitable_workflow.workflow_agents import AnalystAgent
+
+_VALID_CONTENT_TYPES: list[str] = next(
+    f["options"] for f in CONTENT_TASK_FIELDS if f["field_name"] == "内容类型"
+)
 
 router = APIRouter(prefix="/api/v1/workflow", tags=["workflow"])
 logger = logging.getLogger(__name__)
@@ -43,6 +47,13 @@ class SeedRequest(BaseModel):
     table_id: str
     title: str
     content_type: str = "行业洞察"
+
+    @field_validator("content_type")
+    @classmethod
+    def check_content_type(cls, v: str) -> str:
+        if v not in _VALID_CONTENT_TYPES:
+            raise ValueError(f"content_type 必须是以下之一: {_VALID_CONTENT_TYPES}")
+        return v
 
 
 class AnalysisRequest(BaseModel):
